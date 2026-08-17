@@ -16,7 +16,12 @@ class NameMatcher:
 
         self.choices = list(self.search_map.keys())
 
-    def search(self, query: str, limit: int = 5) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+    ) -> list[dict]:
+
         normalized_query = self._normalize(query)
 
         if not normalized_query:
@@ -45,7 +50,9 @@ class NameMatcher:
             if matched_name in already_added:
                 continue
 
-            participant = self.search_map[matched_name]
+            participant = self.search_map[
+                matched_name
+            ]
 
             results.append(
                 {
@@ -55,7 +62,9 @@ class NameMatcher:
                 }
             )
 
-            already_added.add(matched_name)
+            already_added.add(
+                matched_name
+            )
 
             if len(results) >= limit:
                 break
@@ -65,18 +74,46 @@ class NameMatcher:
     def resolve(
         self,
         query: str,
-        automatic_threshold: float = 92.0,
-        ambiguity_margin: float = 5.0,
+        automatic_threshold: float = 97.0,
+        ambiguity_margin: float = 7.0,
     ) -> dict:
-        results = self.search(query, limit=5)
+
+        normalized_query = self._normalize(
+            query
+        )
+
+        if not normalized_query:
+            return self._not_found_result(
+                query
+            )
+
+        exact_participant = self.search_map.get(
+            normalized_query
+        )
+
+        if exact_participant:
+            exact_match = {
+                "participant": exact_participant,
+                "score": 100.0,
+                "match_type": "exact",
+            }
+
+            return {
+                "status": self.STATUS_MATCH,
+                "query": query,
+                "best_match": exact_match,
+                "results": [exact_match],
+            }
+
+        results = self.search(
+            query,
+            limit=5,
+        )
 
         if not results:
-            return {
-                "status": self.STATUS_NOT_FOUND,
-                "query": query,
-                "best_match": None,
-                "results": [],
-            }
+            return self._not_found_result(
+                query
+            )
 
         best = results[0]
 
@@ -91,7 +128,10 @@ class NameMatcher:
         if len(results) > 1:
             second = results[1]
 
-            difference = best["score"] - second["score"]
+            difference = (
+                best["score"]
+                - second["score"]
+            )
 
             if difference < ambiguity_margin:
                 return {
@@ -113,18 +153,28 @@ class NameMatcher:
         query: str,
         limit: int = 5,
     ) -> list[dict]:
+
         query_words = query.split()
 
         matches = []
 
         for participant in self.participants:
-            nome = participant["nome"].lower()
-            cognome = participant["cognome"].lower()
+            nome = (
+                participant["nome"]
+                .lower()
+            )
 
-            score = self._calculate_prefix_score(
-                query_words,
-                nome,
-                cognome,
+            cognome = (
+                participant["cognome"]
+                .lower()
+            )
+
+            score = (
+                self._calculate_prefix_score(
+                    query_words,
+                    nome,
+                    cognome,
+                )
             )
 
             if score is None:
@@ -141,7 +191,9 @@ class NameMatcher:
         matches.sort(
             key=lambda item: (
                 -item["score"],
-                item["participant"]["nome_completo"],
+                item["participant"][
+                    "nome_completo"
+                ],
             )
         )
 
@@ -182,8 +234,26 @@ class NameMatcher:
 
         return None
 
+    def _not_found_result(
+        self,
+        query: str,
+    ) -> dict:
+
+        return {
+            "status": self.STATUS_NOT_FOUND,
+            "query": query,
+            "best_match": None,
+            "results": [],
+        }
+
     @staticmethod
-    def _normalize(value: str) -> str:
+    def _normalize(
+        value: str,
+    ) -> str:
+
         return " ".join(
-            value.strip().lower().split()
+            value
+            .strip()
+            .lower()
+            .split()
         )

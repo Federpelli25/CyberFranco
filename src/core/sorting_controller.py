@@ -1,4 +1,7 @@
-from PySide6.QtCore import QObject, QTimer
+from PySide6.QtCore import (
+    QObject,
+    QTimer,
+)
 
 from src.core.state_manager import (
     AppState,
@@ -31,22 +34,70 @@ class SortingController(QObject):
             self.start_sorting
         )
 
+        self.operator_window.listening_started.connect(
+            self._start_listening
+        )
+
+        self.operator_window.listening_ambiguous.connect(
+            self._await_confirmation
+        )
+
+        self.operator_window.listening_failed.connect(
+            self._return_to_idle
+        )
+
         self.public_window.reveal_finished.connect(
             self._finish_sorting
         )
+
+    def _start_listening(self):
+        if not self.state_manager.is_idle():
+            return
+
+        self.state_manager.set_state(
+            AppState.LISTENING
+        )
+
+        self.public_window.show_listening()
+
+    def _await_confirmation(self):
+        self.state_manager.set_state(
+            AppState.AWAITING_CONFIRMATION
+        )
+
+        self.public_window.show_waiting_confirmation()
+
+    def _return_to_idle(self):
+        self.state_manager.set_state(
+            AppState.IDLE
+        )
+
+        self.public_window.show_idle()
 
     def start_sorting(
         self,
         participant: dict,
     ):
-        if self.state_manager.is_busy():
+        allowed_states = {
+            AppState.IDLE,
+            AppState.LISTENING,
+            AppState.AWAITING_CONFIRMATION,
+        }
+
+        if (
+            self.state_manager.state
+            not in allowed_states
+        ):
             print(
                 "Assegnazione ignorata: "
                 "applicazione occupata."
             )
+
             return
 
-        self.current_participant = participant
+        self.current_participant = (
+            participant
+        )
 
         print(
             f"INIZIO ASSEGNAZIONE: "
@@ -72,7 +123,9 @@ class SortingController(QObject):
         if self.current_participant is None:
             return
 
-        participant = self.current_participant
+        participant = (
+            self.current_participant
+        )
 
         self.state_manager.set_state(
             AppState.REVEAL

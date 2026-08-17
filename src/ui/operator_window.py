@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import (
+    Qt,
+    Signal,
+    QThread,
+)
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -13,6 +17,12 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
+from src.audio.speech_to_text import (
+    SpeechToText,
+)
+from src.audio.voice_recognition_worker import (
+    VoiceRecognitionWorker,
+)
 from src.data.participant_repository import (
     ParticipantRepository,
 )
@@ -25,6 +35,10 @@ class OperatorWindow(QMainWindow):
 
     participant_confirmed = Signal(dict)
 
+    listening_started = Signal()
+    listening_ambiguous = Signal()
+    listening_failed = Signal()
+
     def __init__(self):
         super().__init__()
 
@@ -34,7 +48,7 @@ class OperatorWindow(QMainWindow):
 
         self.resize(
             900,
-            650,
+            700,
         )
 
         self.repository = ParticipantRepository(
@@ -51,11 +65,47 @@ class OperatorWindow(QMainWindow):
             self.participants
         )
 
+        self.hotwords = ", ".join(
+            participant["nome_completo"]
+            for participant in self.participants
+        )
+
         self.selected_participant = None
+
         self.processing = False
+        self.voice_processing = False
+
+        self.voice_thread = None
+        self.voice_worker = None
 
         self._build_ui()
         self._connect_events()
+
+        self._load_speech_model()
+
+    def _load_speech_model(self):
+        self.process_label.setText(
+            "STATO: CARICAMENTO WHISPER"
+        )
+
+        self.listen_button.setEnabled(
+            False
+        )
+
+        self.speech_to_text = SpeechToText(
+            model_size="small",
+            device="cpu",
+            compute_type="int8",
+            language="it",
+        )
+
+        self.process_label.setText(
+            "STATO: PRONTO"
+        )
+
+        self.listen_button.setEnabled(
+            True
+        )
 
     def _build_ui(self):
         central_widget = QWidget()
@@ -108,6 +158,37 @@ class OperatorWindow(QMainWindow):
                 font-weight: bold;
                 color: #28a745;
                 padding: 8px;
+            }
+            """
+        )
+
+        self.transcription_label = QLabel(
+            "Voce riconosciuta: -"
+        )
+
+        self.transcription_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.transcription_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 18px;
+                padding: 8px;
+            }
+            """
+        )
+
+        self.listen_button = QPushButton(
+            "ASCOLTA"
+        )
+
+        self.listen_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 24px;
+                font-weight: bold;
+                padding: 15px;
             }
             """
         )
@@ -210,6 +291,14 @@ class OperatorWindow(QMainWindow):
         )
 
         main_layout.addWidget(
+            self.transcription_label
+        )
+
+        main_layout.addWidget(
+            self.listen_button
+        )
+
+        main_layout.addWidget(
             self.search_input
         )
 
@@ -226,6 +315,10 @@ class OperatorWindow(QMainWindow):
         )
 
     def _connect_events(self):
+        self.listen_button.clicked.connect(
+            self._start_voice_recognition
+        )
+
         self.search_input.textChanged.connect(
             self._update_results
         )
@@ -250,11 +343,263 @@ class OperatorWindow(QMainWindow):
             self._clear_search
         )
 
+    def _start_voice_recognition(self):
+        if self.processing:
+            return
+
+        if self.voice_processing:
+            return
+
+        self.voice_processing = True
+
+        self.transcription_label.setText(
+            "Voce riconosciuta: ascolto..."
+        )
+
+        self.process_label.setText(
+            "STATO: ASCOLTO"
+        )
+
+        self.listen_button.setEnabled(
+            False
+        )
+
+        self.search_input.setEnabled(
+            False
+        )
+
+        self.results_list.setEnabled(
+            False
+        )
+
+        self.clear_button.setEnabled(
+            False
+        )
+
+        self.confirm_button.setEnabled(
+            False
+        )
+
+        self.listening_started.emit()
+
+        self.voice_thread = QThread()
+
+        self.voice_worker = (
+            VoiceRecognitionWorker(
+                speech_to_text=
+                    self.speech_to_text,
+                hotwords=
+                    self.hotwords,
+                duration_seconds=4.0,
+            )
+        )
+
+        self.voice_worker.moveToThread(
+            self.voice_thread
+        )
+
+        self.voice_thread.started.connect(
+            self.voice_worker.run
+        )
+
+        self.voice_worker.completed.connect(
+            self._voice_recognition_completed
+        )
+
+        self.voice_worker.failed.connect(
+            self._voice_recognition_failed
+        )
+
+        self.voice_worker.completed.connect(
+            self.voice_thread.quit
+        )
+
+        self.voice_worker.failed.connect(
+            self.voice_thread.quit
+        )
+
+        self.voice_thread.finished.connect(
+            self.voice_worker.deleteLater
+        )
+
+        self.voice_thread.finished.connect(
+            self.voice_thread.deleteLater
+        )
+
+        self.voice_thread.start()
+
+    def _voice_recognition_completed(
+        self,
+        transcription: str,
+    ):
+        self.voice_processing = False
+
+        if not transcription:
+            self.transcription_label.setText(
+                "Voce riconosciuta: nessun testo"
+            )
+
+            self.listening_failed.emit()
+
+            self._enable_manual_controls()
+            return
+
+        self.transcription_label.setText(
+            f"Voce riconosciuta: "
+            f"{transcription}"
+        )
+
+        result = self.matcher.resolve(
+            transcription
+        )
+
+        if (
+            result["status"]
+            == NameMatcher.STATUS_MATCH
+        ):
+            best_match = result[
+                "best_match"
+            ]
+
+            participant = best_match[
+                "participant"
+            ]
+
+            self.selected_participant = (
+                participant
+            )
+
+            self.selection_label.setText(
+                f"{participant['nome_completo']} "
+                f"({best_match['score']}%)"
+            )
+
+            self.participant_confirmed.emit(
+                participant
+            )
+
+            return
+
+        if (
+            result["status"]
+            == NameMatcher.STATUS_AMBIGUOUS
+        ):
+            self._show_voice_candidates(
+                result["results"]
+            )
+
+            self.process_label.setText(
+                "STATO: SCELTA PARTECIPANTE"
+            )
+
+            self.listening_ambiguous.emit()
+
+            self._enable_manual_controls()
+
+            return
+
+        self.selection_label.setText(
+            "Nessun partecipante trovato"
+        )
+
+        self.search_input.setText(
+            transcription
+        )
+
+        self.listening_failed.emit()
+
+        self._enable_manual_controls()
+
+    def _voice_recognition_failed(
+        self,
+        error_message: str,
+    ):
+        self.voice_processing = False
+
+        print(
+            f"Errore riconoscimento vocale: "
+            f"{error_message}"
+        )
+
+        self.transcription_label.setText(
+            "Errore durante il riconoscimento vocale"
+        )
+
+        self.listening_failed.emit()
+
+        self._enable_manual_controls()
+
+    def _enable_manual_controls(self):
+        if self.processing:
+            return
+
+        self.listen_button.setEnabled(
+            True
+        )
+
+        self.search_input.setEnabled(
+            True
+        )
+
+        self.results_list.setEnabled(
+            True
+        )
+
+        self.clear_button.setEnabled(
+            True
+        )
+
+        if self.selected_participant:
+            self.confirm_button.setEnabled(
+                True
+            )
+
+        self.search_input.setFocus()
+
+    def _show_voice_candidates(
+        self,
+        results: list[dict],
+    ):
+        self.results_list.clear()
+
+        self.selected_participant = None
+
+        for result in results:
+            participant = result[
+                "participant"
+            ]
+
+            score = result[
+                "score"
+            ]
+
+            item = QListWidgetItem(
+                f"{participant['nome_completo']} "
+                f"({score}%)"
+            )
+
+            item.setData(
+                Qt.UserRole,
+                participant,
+            )
+
+            self.results_list.addItem(
+                item
+            )
+
+        if self.results_list.count() > 0:
+            self.results_list.setCurrentRow(
+                0
+            )
+
     def _update_results(
         self,
         text,
     ):
         if self.processing:
+            return
+
+        if self.voice_processing:
             return
 
         self.results_list.clear()
@@ -307,6 +652,9 @@ class OperatorWindow(QMainWindow):
         if self.processing:
             return
 
+        if self.voice_processing:
+            return
+
         item = (
             self.results_list.currentItem()
         )
@@ -345,6 +693,9 @@ class OperatorWindow(QMainWindow):
         if self.processing:
             return
 
+        if self.voice_processing:
+            return
+
         self.selected_participant = (
             item.data(
                 Qt.UserRole
@@ -355,6 +706,9 @@ class OperatorWindow(QMainWindow):
 
     def _confirm_or_select_first(self):
         if self.processing:
+            return
+
+        if self.voice_processing:
             return
 
         if self.selected_participant:
@@ -372,6 +726,9 @@ class OperatorWindow(QMainWindow):
 
     def _confirm_selection(self):
         if self.processing:
+            return
+
+        if self.voice_processing:
             return
 
         if not self.selected_participant:
@@ -410,6 +767,10 @@ class OperatorWindow(QMainWindow):
             not processing
         )
 
+        self.listen_button.setEnabled(
+            not processing
+        )
+
         if processing:
             self.confirm_button.setEnabled(
                 False
@@ -425,31 +786,9 @@ class OperatorWindow(QMainWindow):
                 "STATO: ELABORAZIONE"
             )
 
-            self.process_label.setStyleSheet(
-                """
-                QLabel {
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: #e0a800;
-                    padding: 8px;
-                }
-                """
-            )
-
         else:
             self.process_label.setText(
                 "STATO: PRONTO"
-            )
-
-            self.process_label.setStyleSheet(
-                """
-                QLabel {
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: #28a745;
-                    padding: 8px;
-                }
-                """
             )
 
     def reset_for_next_participant(self):
@@ -459,8 +798,16 @@ class OperatorWindow(QMainWindow):
 
         self.selected_participant = None
 
+        self.transcription_label.setText(
+            "Voce riconosciuta: -"
+        )
+
         self.selection_label.setText(
             "Nessun partecipante selezionato"
+        )
+
+        self.process_label.setText(
+            "STATO: PRONTO"
         )
 
         self.confirm_button.setEnabled(
@@ -479,10 +826,17 @@ class OperatorWindow(QMainWindow):
             True
         )
 
+        self.listen_button.setEnabled(
+            True
+        )
+
         self.search_input.setFocus()
 
     def _clear_search(self):
         if self.processing:
+            return
+
+        if self.voice_processing:
             return
 
         self.search_input.clear()
@@ -490,6 +844,10 @@ class OperatorWindow(QMainWindow):
         self.results_list.clear()
 
         self.selected_participant = None
+
+        self.transcription_label.setText(
+            "Voce riconosciuta: -"
+        )
 
         self.selection_label.setText(
             "Nessun partecipante selezionato"

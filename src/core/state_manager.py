@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, Signal
 class AppState(str, Enum):
     IDLE = "IDLE"
     LISTENING = "LISTENING"
+    AWAITING_CONFIRMATION = "AWAITING_CONFIRMATION"
     THINKING = "THINKING"
     REVEAL = "REVEAL"
 
@@ -23,7 +24,10 @@ class StateManager(QObject):
     def state(self) -> AppState:
         return self._state
 
-    def set_state(self, state: AppState):
+    def set_state(
+        self,
+        state: AppState,
+    ):
         if self._state == state:
             return
 
@@ -38,7 +42,13 @@ class StateManager(QObject):
         )
 
     def is_idle(self) -> bool:
-        return self._state == AppState.IDLE
+        return (
+            self._state
+            == AppState.IDLE
+        )
 
     def is_busy(self) -> bool:
-        return self._state != AppState.IDLE
+        return (
+            self._state
+            != AppState.IDLE
+        )

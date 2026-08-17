@@ -137,6 +137,98 @@ class PublicWindow(QMainWindow):
             1.0
         )
 
+    def show_listening(self):
+        self._stop_current_animation()
+
+        self.logo_label.clear()
+
+        self.logo_label.setVisible(
+            False
+        )
+
+        self.central_widget.setStyleSheet(
+            """
+            QWidget {
+                background:
+                    qradialgradient(
+                        cx: 0.5,
+                        cy: 0.5,
+                        radius: 0.8,
+                        fx: 0.5,
+                        fy: 0.5,
+                        stop: 0 #10294a,
+                        stop: 0.5 #091421,
+                        stop: 1 #050505
+                    );
+            }
+            """
+        )
+
+        self.main_label.setText(
+            "Ti ascolto..."
+        )
+
+        self.main_label.setStyleSheet(
+            """
+            QLabel {
+                color: #d7eaff;
+                font-size: 68px;
+                font-weight: 700;
+                letter-spacing: 4px;
+            }
+            """
+        )
+
+        self.opacity_effect.setOpacity(
+            1.0
+        )
+
+    def show_waiting_confirmation(self):
+        self._stop_current_animation()
+
+        self.logo_label.clear()
+
+        self.logo_label.setVisible(
+            False
+        )
+
+        self.central_widget.setStyleSheet(
+            """
+            QWidget {
+                background:
+                    qradialgradient(
+                        cx: 0.5,
+                        cy: 0.5,
+                        radius: 0.8,
+                        fx: 0.5,
+                        fy: 0.5,
+                        stop: 0 #332817,
+                        stop: 0.5 #15110b,
+                        stop: 1 #050505
+                    );
+            }
+            """
+        )
+
+        self.main_label.setText(
+            "Aspetta... fammi pensare."
+        )
+
+        self.main_label.setStyleSheet(
+            """
+            QLabel {
+                color: #e8d8b5;
+                font-size: 64px;
+                font-weight: 700;
+                letter-spacing: 3px;
+            }
+            """
+        )
+
+        self.opacity_effect.setOpacity(
+            1.0
+        )
+
     def show_thinking(self):
         self._stop_current_animation()
 
@@ -451,13 +543,10 @@ class PublicWindow(QMainWindow):
         self.reveal_finished.emit()
 
     def _stop_current_animation(self):
-        if self.reveal_animation is not None:
-            if (
-                self.reveal_animation.state()
-                !=
-                self.reveal_animation.State.Stopped
-            ):
-                self.reveal_animation.stop()
+        if self.reveal_animation is None:
+            return
+
+        self.reveal_animation.stop()
 
     @staticmethod
     def _slugify_team_name(
