@@ -10,11 +10,10 @@ from src.core.state_manager import (
     AppState,
     StateManager,
 )
+from src.config.settings_loader import AppSettings
 
 
 class SortingController(QObject):
-
-    THINKING_DURATION_MS = 1200
 
     def __init__(
         self,
@@ -22,6 +21,7 @@ class SortingController(QObject):
         public_window,
         state_manager: StateManager,
         participant_tracker: ParticipantTracker,
+        settings: AppSettings,
     ):
         super().__init__()
 
@@ -40,6 +40,8 @@ class SortingController(QObject):
         self.participant_tracker = (
             participant_tracker
         )
+
+        self.settings = settings
 
         self.current_participant = None
 
@@ -145,7 +147,7 @@ class SortingController(QObject):
         self.public_window.show_thinking()
 
         QTimer.singleShot(
-            self.THINKING_DURATION_MS,
+            self.settings.thinking_duration_ms,
             self._start_reveal,
         )
 

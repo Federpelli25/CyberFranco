@@ -1,7 +1,14 @@
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import (
+    QApplication,
+    QMessageBox,
+)
 
+from src.config.settings_loader import (
+    SettingsError,
+    SettingsLoader,
+)
 from src.core.participant_tracker import ParticipantTracker
 from src.core.sorting_controller import SortingController
 from src.core.state_manager import StateManager
@@ -9,12 +16,22 @@ from src.ui.operator_window import OperatorWindow
 from src.ui.public_window import PublicWindow
 
 
-def main():
+def main() -> int:
     app = QApplication(sys.argv)
 
+    try:
+        settings = SettingsLoader().load()
+    except SettingsError as exc:
+        QMessageBox.critical(
+            None,
+            "Errore configurazione",
+            str(exc),
+        )
+        return 1
+
     state_manager = StateManager()
-    operator_window = OperatorWindow()
-    public_window = PublicWindow()
+    operator_window = OperatorWindow(settings)
+    public_window = PublicWindow(settings)
     participant_tracker = ParticipantTracker(
         operator_window.participants
     )
@@ -24,13 +41,14 @@ def main():
         public_window=public_window,
         state_manager=state_manager,
         participant_tracker=participant_tracker,
+        settings=settings,
     )
 
     operator_window.show()
-    public_window.show()
+    public_window.show_configured()
 
-    sys.exit(app.exec())
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

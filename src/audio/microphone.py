@@ -8,9 +8,11 @@ class MicrophoneRecorder:
         self,
         sample_rate: int = 16000,
         channels: int = 1,
+        device: int | str | None = None,
     ):
         self.sample_rate = sample_rate
         self.channels = channels
+        self.device = device
 
     def record(
         self,
@@ -37,6 +39,7 @@ class MicrophoneRecorder:
             channels=self.channels,
             dtype="float32",
             blocking=True,
+            device=self.device,
         )
 
         print("Registrazione completata.")

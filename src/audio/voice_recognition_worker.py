@@ -14,6 +14,7 @@ class VoiceRecognitionWorker(QObject):
         speech_to_text: SpeechToText,
         hotwords: str,
         duration_seconds: float = 4.0,
+        microphone_device: int | str | None = None,
     ):
         super().__init__()
 
@@ -24,6 +25,7 @@ class VoiceRecognitionWorker(QObject):
         self.recorder = MicrophoneRecorder(
             sample_rate=16000,
             channels=1,
+            device=microphone_device,
         )
 
     @Slot()
