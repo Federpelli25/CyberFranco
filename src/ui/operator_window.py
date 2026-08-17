@@ -5,6 +5,7 @@ from PySide6.QtCore import (
     Signal,
     QThread,
 )
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QGroupBox,
+    QCheckBox,
 )
 
 from src.audio.audio_device_manager import (
@@ -44,6 +46,7 @@ from src.config.settings_loader import (
 from src.recognition.name_matcher import (
     NameMatcher,
 )
+from src.ui.display_manager import DisplayManager
 
 
 logger = logging.getLogger(__name__)
@@ -59,16 +62,20 @@ class OperatorWindow(QMainWindow):
 
     undo_last_requested = Signal()
     reset_participant_requested = Signal(dict)
+    public_display_changed = Signal(int, bool)
 
     def __init__(
         self,
         settings: AppSettings,
         settings_loader: SettingsLoader,
+        display_manager: DisplayManager | None = None,
     ):
         super().__init__()
 
         self.settings = settings
         self.settings_loader = settings_loader
+        self.display_manager = display_manager or DisplayManager()
+        self.preferred_display_index = settings.public_display_monitor
         self.audio_device_manager = AudioDeviceManager()
         self.current_microphone_device = (
             settings.microphone_device
@@ -119,6 +126,12 @@ class OperatorWindow(QMainWindow):
 
         self._build_ui()
         self._connect_events()
+
+        self._refresh_displays(initial_load=True)
+        application = self.display_manager.application
+        if application is not None:
+            application.screenAdded.connect(self._screen_configuration_changed)
+            application.screenRemoved.connect(self._screen_configuration_changed)
 
         self._refresh_audio_devices(initial_load=True)
         self._load_speech_model()
@@ -292,6 +305,31 @@ class OperatorWindow(QMainWindow):
             self.microphone_test_label
         )
 
+        display_group = QGroupBox("DISPLAY PUBBLICO")
+        display_layout = QVBoxLayout(display_group)
+        self.display_combo = QComboBox()
+        self.display_combo.setMinimumHeight(38)
+        self.refresh_displays_button = QPushButton("AGGIORNA MONITOR")
+        self.public_display_fullscreen_checkbox = QCheckBox("Fullscreen")
+        self.public_display_fullscreen_checkbox.setChecked(
+            self.settings.public_display_fullscreen
+        )
+        self.apply_display_button = QPushButton(
+            "APRI / RIPOSIZIONA DISPLAY"
+        )
+        self.display_status_label = QLabel("Rilevamento monitor...")
+        self.display_status_label.setWordWrap(True)
+        display_layout.addWidget(self.display_combo)
+        display_layout.addWidget(self.refresh_displays_button)
+        display_layout.addWidget(self.public_display_fullscreen_checkbox)
+        display_layout.addWidget(self.apply_display_button)
+        display_layout.addWidget(self.display_status_label)
+
+        self.public_display_shortcut = QShortcut(
+            QKeySequence("Ctrl+Shift+F"),
+            self,
+        )
+
         self.search_input = QLineEdit()
 
         self.search_input.setPlaceholderText(
@@ -425,6 +463,8 @@ class OperatorWindow(QMainWindow):
             microphone_group
         )
 
+        main_layout.addWidget(display_group)
+
         main_layout.addWidget(
             self.listen_button
         )
@@ -474,6 +514,22 @@ class OperatorWindow(QMainWindow):
             self._start_microphone_test
         )
 
+        self.display_combo.currentIndexChanged.connect(
+            self._display_selection_changed
+        )
+        self.refresh_displays_button.clicked.connect(
+            self._refresh_displays
+        )
+        self.public_display_fullscreen_checkbox.toggled.connect(
+            self._display_fullscreen_changed
+        )
+        self.apply_display_button.clicked.connect(
+            self._manual_apply_public_display
+        )
+        self.public_display_shortcut.activated.connect(
+            self._emergency_exit_public_fullscreen
+        )
+
         self.search_input.textChanged.connect(
             self._update_results
         )
@@ -509,6 +565,124 @@ class OperatorWindow(QMainWindow):
         self.reset_selected_button.clicked.connect(
             self._request_processed_reset
         )
+
+    def _refresh_displays(
+        self,
+        initial_load: bool = False,
+        force: bool = False,
+    ):
+        if self.processing and not initial_load and not force:
+            return
+
+        requested = self.preferred_display_index
+        screens = self.display_manager.list_screens()
+        resolved = self.display_manager.resolve_screen(requested)
+
+        self.display_combo.blockSignals(True)
+        self.display_combo.clear()
+        for screen in screens:
+            self.display_combo.addItem(
+                self.display_manager.format_screen(screen),
+                screen["index"],
+            )
+
+        if resolved is None:
+            self.display_status_label.setText("NESSUN MONITOR DISPONIBILE")
+            self.display_combo.blockSignals(False)
+            self._update_display_controls()
+            return
+
+        selected_index = self.display_combo.findData(resolved["index"])
+        self.display_combo.setCurrentIndex(max(selected_index, 0))
+        self.display_combo.blockSignals(False)
+
+        if len(screens) == 1:
+            self.show_warning("È DISPONIBILE UN SOLO MONITOR")
+            self.display_status_label.setText(
+                "È disponibile un solo monitor. Usa la modalità finestra "
+                "per mantenere visibile la console."
+            )
+        else:
+            self.display_status_label.setText(
+                f"Monitor rilevati: {len(screens)}"
+            )
+
+        if resolved["index"] != requested:
+            logger.warning("Public display fallback to primary screen")
+
+        if not initial_load:
+            self._apply_public_display(force=force, persist=False)
+        self._update_display_controls()
+
+    def _screen_configuration_changed(self, *_):
+        logger.warning("Screen configuration changed")
+        self._refresh_displays(initial_load=False, force=True)
+
+    def _display_selection_changed(self, index: int):
+        if index < 0 or self.processing:
+            return
+        self.preferred_display_index = int(self.display_combo.currentData())
+        self._apply_public_display()
+
+    def _display_fullscreen_changed(self, _checked: bool):
+        if self.processing:
+            return
+        self._apply_public_display()
+
+    def _manual_apply_public_display(self):
+        self._apply_public_display()
+
+    def _apply_public_display(
+        self,
+        force: bool = False,
+        persist: bool = True,
+    ):
+        if (
+            (self.processing and not force)
+            or self.display_combo.currentIndex() < 0
+        ):
+            return
+        screen_index = int(self.display_combo.currentData())
+        fullscreen = self.public_display_fullscreen_checkbox.isChecked()
+        if persist:
+            self._save_public_display_settings()
+        logger.info(
+            "Public display selected: screen=%d fullscreen=%s",
+            screen_index,
+            fullscreen,
+        )
+        self.public_display_changed.emit(screen_index, fullscreen)
+
+    def _save_public_display_settings(self):
+        if self.display_combo.currentIndex() < 0:
+            return
+        try:
+            self.settings_loader.save_public_display(
+                self.preferred_display_index,
+                self.public_display_fullscreen_checkbox.isChecked(),
+            )
+        except SettingsError as exc:
+            logger.exception("Public display settings could not be saved")
+            self.display_status_label.setText(
+                f"Preferenza display non salvata: {exc}"
+            )
+
+    def _emergency_exit_public_fullscreen(self):
+        logger.warning("Emergency public fullscreen exit requested")
+        self.public_display_fullscreen_checkbox.blockSignals(True)
+        self.public_display_fullscreen_checkbox.setChecked(False)
+        self.public_display_fullscreen_checkbox.blockSignals(False)
+        if self.display_combo.currentIndex() >= 0:
+            screen_index = int(self.display_combo.currentData())
+            self._save_public_display_settings()
+            self.public_display_changed.emit(screen_index, False)
+
+    def _update_display_controls(self):
+        enabled = self.display_combo.count() > 0 and not self.processing
+        self.display_combo.setEnabled(enabled)
+        self.refresh_displays_button.setEnabled(not self.processing)
+        self.public_display_fullscreen_checkbox.setEnabled(enabled)
+        self.apply_display_button.setEnabled(enabled)
 
     def _refresh_audio_devices(
         self,
@@ -1398,6 +1572,7 @@ class OperatorWindow(QMainWindow):
         processing: bool,
     ):
         self.processing = processing
+        self._update_display_controls()
 
         self.search_input.setEnabled(
             not processing

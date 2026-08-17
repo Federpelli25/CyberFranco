@@ -61,8 +61,16 @@ class WhisperMissingGuiTests(unittest.TestCase):
             self.assertFalse(window.listen_button.isEnabled())
             self.assertTrue(window.search_input.isEnabled())
             self.assertTrue(window.results_list.isEnabled())
+            self.assertGreaterEqual(window.display_combo.count(), 1)
             self.assertIn(
                 "MODELLO WHISPER NON DISPONIBILE",
                 window.process_label.text(),
             )
+
+            window.set_processing(True)
+            self.assertFalse(window.display_combo.isEnabled())
+            self.assertFalse(window.apply_display_button.isEnabled())
+
+            window.set_processing(False)
+            self.assertTrue(window.display_combo.isEnabled())
             window.close()

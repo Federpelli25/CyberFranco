@@ -75,3 +75,9 @@ La configurazione generale viene letta all'avvio. La selezione del microfono è
 invece salvata e applicata immediatamente dalla console operatore. Il
 caricamento del modello Whisper avviene ancora durante la costruzione della
 console operatore.
+
+### Aggiornamento display pubblico
+
+Le preferenze di monitor pubblico e fullscreen, come la selezione microfono,
+vengono salvate e applicate immediatamente dalla console operatore tramite lo
+stesso `SettingsLoader`.

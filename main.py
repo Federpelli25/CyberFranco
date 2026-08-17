@@ -17,6 +17,7 @@ from src.core.sorting_controller import SortingController
 from src.core.state_manager import StateManager
 from src.ui.operator_window import OperatorWindow
 from src.ui.public_window import PublicWindow
+from src.ui.display_manager import DisplayManager
 
 
 def install_exception_handler() -> None:
@@ -69,12 +70,14 @@ def main() -> int:
     logger.info("Settings loaded")
 
     state_manager = StateManager()
+    display_manager = DisplayManager(app)
     try:
         operator_window = OperatorWindow(
             settings,
             settings_loader,
+            display_manager,
         )
-        public_window = PublicWindow(settings)
+        public_window = PublicWindow(settings, display_manager)
     except ParticipantDataError as exc:
         logger.exception("Application startup blocked by participant data")
         QMessageBox.critical(
@@ -111,6 +114,18 @@ def main() -> int:
         participant_tracker=participant_tracker,
         settings=settings,
     )
+
+    operator_window.public_display_changed.connect(
+        public_window.apply_display_settings
+    )
+
+    primary_screen = display_manager.get_primary_screen()
+    if primary_screen is not None:
+        primary_geometry = primary_screen["geometry"]
+        operator_window.move(
+            primary_geometry["x"] + 40,
+            primary_geometry["y"] + 40,
+        )
 
     operator_window.show()
     public_window.show_configured()

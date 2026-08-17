@@ -209,6 +209,38 @@ class SettingsLoader:
                 f"di configurazione '{path}': {exc}"
             ) from exc
 
+    def save_public_display(
+        self,
+        screen_index: int,
+        fullscreen: bool,
+        settings_path: str | Path | None = None,
+    ) -> None:
+        values_to_validate = {**self.DEFAULTS}
+        values_to_validate["public_display_monitor"] = screen_index
+        values_to_validate["public_display_fullscreen"] = fullscreen
+        self._validate(values_to_validate)
+
+        path = self._resolve_settings_path(settings_path)
+        values = self._read_json(path)
+        values["public_display_monitor"] = screen_index
+        values["public_display_fullscreen"] = fullscreen
+        temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+
+        try:
+            temporary_path.write_text(
+                json.dumps(values, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            temporary_path.replace(path)
+        except OSError as exc:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise SettingsError(
+                "Impossibile salvare le impostazioni del display pubblico."
+            ) from exc
+
     def _resolve_settings_path(
         self,
         settings_path: str | Path | None,

@@ -90,3 +90,7 @@ La feature gestisce il recovery runtime. Non salva la sessione su disco, non
 ripristina una sessione dopo un riavvio e non introduce gestione multi-monitor.
 La disponibilità effettiva di microfoni, driver PortAudio e monitor deve essere
 verificata sulla macchina dell'evento.
+
+Il recovery multi-monitor è ora implementato dalla feature `public-display`:
+monitor rimossi o non disponibili causano un fallback runtime sul primary senza
+interrompere il reveal o la console operatore.

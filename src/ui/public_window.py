@@ -13,7 +13,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -21,6 +20,7 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
 )
 from src.config.settings_loader import AppSettings
+from src.ui.display_manager import DisplayManager
 
 
 logger = logging.getLogger(__name__)
@@ -30,10 +30,15 @@ class PublicWindow(QMainWindow):
 
     reveal_finished = Signal()
 
-    def __init__(self, settings: AppSettings):
+    def __init__(
+        self,
+        settings: AppSettings,
+        display_manager: DisplayManager | None = None,
+    ):
         super().__init__()
 
         self.settings = settings
+        self.display_manager = display_manager or DisplayManager()
 
         self.setWindowTitle(
             "CyberFranco - Public Display"
@@ -55,22 +60,76 @@ class PublicWindow(QMainWindow):
         self.show_idle()
 
     def show_configured(self):
-        screens = QApplication.screens()
+        self.apply_display_settings(
+            self.settings.public_display_monitor,
+            self.settings.public_display_fullscreen,
+        )
 
-        monitor_index = self.settings.public_display_monitor
+    def apply_display_settings(
+        self,
+        screen_identifier,
+        fullscreen: bool,
+    ):
+        try:
+            selected = self.display_manager.resolve_screen(screen_identifier)
+            if selected is None:
+                logger.error("Public display cannot be shown: no Qt screen")
+                self.showNormal()
+                return
 
-        if monitor_index >= len(screens):
-            monitor_index = 0
-
-        if screens:
+            geometry = selected["geometry"]
+            self.showNormal()
+            handle = self.windowHandle()
+            if handle is not None:
+                handle.setScreen(selected["screen"])
             self.setGeometry(
-                screens[monitor_index].availableGeometry()
+                geometry["x"],
+                geometry["y"],
+                geometry["width"],
+                geometry["height"],
             )
 
-        if self.settings.public_display_fullscreen:
-            self.showFullScreen()
-        else:
-            self.show()
+            if fullscreen:
+                self.showFullScreen()
+                logger.info("Fullscreen enabled")
+            else:
+                self.showNormal()
+                self.setGeometry(
+                    geometry["x"],
+                    geometry["y"],
+                    geometry["width"],
+                    geometry["height"],
+                )
+                logger.info("Fullscreen disabled")
+
+            logger.info(
+                "Public display moved: screen=%s geometry=%s,%s %sx%s",
+                selected["index"],
+                geometry["x"],
+                geometry["y"],
+                geometry["width"],
+                geometry["height"],
+            )
+        except Exception:
+            logger.exception("Public display positioning failed")
+            self.showNormal()
+            try:
+                fallback = self.display_manager.get_primary_screen()
+                if fallback is None:
+                    return
+                geometry = fallback["geometry"]
+                self.setGeometry(
+                    geometry["x"],
+                    geometry["y"],
+                    geometry["width"],
+                    geometry["height"],
+                )
+                handle = self.windowHandle()
+                if handle is not None:
+                    handle.setScreen(fallback["screen"])
+                logger.warning("Public display fallback to primary screen")
+            except Exception:
+                logger.exception("Primary screen fallback failed")
 
     def _build_ui(self):
         self.central_widget = QWidget()
