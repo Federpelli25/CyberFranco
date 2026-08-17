@@ -125,6 +125,9 @@ class SortingControllerTrackingTests(unittest.TestCase):
                 "data/partecipanti_example.xlsx"
             ),
             whisper_model="small",
+            whisper_model_path=(
+                "models/faster-whisper-small"
+            ),
             whisper_device="cpu",
             whisper_compute_type="int8",
             language="it",

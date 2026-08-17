@@ -1,54 +1,109 @@
 import string
+from pathlib import Path
 
 import numpy as np
-
 from faster_whisper import WhisperModel
 
 
+class SpeechModelError(RuntimeError):
+    """Errore leggibile relativo al modello Whisper locale."""
+
+
 class SpeechToText:
+    REQUIRED_MODEL_FILES = (
+        "model.bin",
+        "config.json",
+        "tokenizer.json",
+    )
 
     def __init__(
         self,
-        model_size: str = "small",
+        model_path: str | Path,
         device: str = "cpu",
         compute_type: str = "int8",
         language: str = "it",
     ):
-        self.model_size = model_size
+        self.model_path = self.validate_model_path(
+            model_path
+        )
         self.device = device
         self.compute_type = compute_type
         self.language = language
 
         print(
-            f"Caricamento modello Whisper '{model_size}'..."
+            "Modello Whisper locale:\n"
+            f"{self.model_path}"
         )
+        print("Caricamento modello Whisper...")
 
-        self.model = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type,
-        )
+        try:
+            self.model = WhisperModel(
+                str(self.model_path),
+                device=device,
+                compute_type=compute_type,
+                local_files_only=True,
+            )
+        except Exception as exc:
+            print(f"Errore modello Whisper: {exc}")
+            raise SpeechModelError(
+                "MODELLO WHISPER NON CARICABILE\n\n"
+                "Percorso configurato:\n"
+                f"{self.model_path}\n\n"
+                f"Dettaglio: {exc}"
+            ) from exc
 
-        print(
-            "Modello Whisper caricato."
-        )
+        print("Modello Whisper caricato.")
+
+    @classmethod
+    def validate_model_path(
+        cls,
+        model_path: str | Path,
+    ) -> Path:
+        path = Path(model_path).expanduser().resolve()
+
+        if not path.exists():
+            raise SpeechModelError(
+                "MODELLO WHISPER NON TROVATO\n\n"
+                "Percorso configurato:\n"
+                f"{path}\n\n"
+                "Preparare il modello prima di avviare CyberFranco."
+            )
+
+        if not path.is_dir():
+            raise SpeechModelError(
+                "PERCORSO MODELLO WHISPER NON VALIDO\n\n"
+                f"'{path}' non è una directory."
+            )
+
+        missing_files = [
+            file_name
+            for file_name in cls.REQUIRED_MODEL_FILES
+            if not (path / file_name).is_file()
+        ]
+
+        if missing_files:
+            missing_text = ", ".join(missing_files)
+            raise SpeechModelError(
+                "MODELLO WHISPER INCOMPLETO\n\n"
+                "Percorso configurato:\n"
+                f"{path}\n\n"
+                f"File mancanti: {missing_text}.\n\n"
+                "Eseguire nuovamente lo script di preparazione."
+            )
+
+        return path
 
     def transcribe(
         self,
         audio: np.ndarray,
         hotwords: str | None = None,
     ) -> str:
-
         if audio is None:
-            print(
-                "Audio non disponibile."
-            )
+            print("Audio non disponibile.")
             return ""
 
         if len(audio) == 0:
-            print(
-                "Audio vuoto."
-            )
+            print("Audio vuoto.")
             return ""
 
         audio = np.asarray(
@@ -57,58 +112,27 @@ class SpeechToText:
         ).reshape(-1)
 
         peak_before = float(
-            np.max(
-                np.abs(audio)
-            )
+            np.max(np.abs(audio))
         )
-
         rms_before = float(
-            np.sqrt(
-                np.mean(
-                    np.square(audio)
-                )
-            )
+            np.sqrt(np.mean(np.square(audio)))
         )
 
-        print(
-            "Audio ricevuto da Whisper:"
-        )
+        print("Audio ricevuto da Whisper:")
+        print(f"- campioni: {len(audio)}")
+        print(f"- peak originale: {peak_before:.6f}")
+        print(f"- RMS originale: {rms_before:.6f}")
 
-        print(
-            f"- campioni: {len(audio)}"
-        )
-
-        print(
-            f"- peak originale: "
-            f"{peak_before:.6f}"
-        )
-
-        print(
-            f"- RMS originale: "
-            f"{rms_before:.6f}"
-        )
-
-        audio = self._normalize_audio(
-            audio
-        )
-
-        peak_after = float(
-            np.max(
-                np.abs(audio)
-            )
-        )
-
-        print(
-            f"- peak normalizzato: "
-            f"{peak_after:.6f}"
-        )
+        audio = self._normalize_audio(audio)
+        peak_after = float(np.max(np.abs(audio)))
+        print(f"- peak normalizzato: {peak_after:.6f}")
 
         initial_prompt = (
-            "Verrà pronunciato solamente "
-            "il nome e il cognome di una persona italiana."
+            "Verrà pronunciato solamente il nome e il cognome "
+            "di una persona italiana."
         )
 
-        segments, info = self.model.transcribe(
+        segments, _ = self.model.transcribe(
             audio,
             language=self.language,
             task="transcribe",
@@ -129,71 +153,34 @@ class SpeechToText:
 
         for segment in segments:
             text = segment.text.strip()
-
             print(
-                f"Segmento Whisper: "
-                f"{segment.start:.2f}s - "
-                f"{segment.end:.2f}s -> "
-                f"'{text}'"
+                f"Segmento Whisper: {segment.start:.2f}s - "
+                f"{segment.end:.2f}s -> '{text}'"
             )
 
             if text:
-                text_parts.append(
-                    text
-                )
+                text_parts.append(text)
 
-        transcription = " ".join(
-            text_parts
-        ).strip()
-
-        return self._clean_transcription(
-            transcription
-        )
+        transcription = " ".join(text_parts).strip()
+        return self._clean_transcription(transcription)
 
     @staticmethod
     def _normalize_audio(
         audio: np.ndarray,
     ) -> np.ndarray:
-
-        peak = np.max(
-            np.abs(audio)
-        )
+        peak = np.max(np.abs(audio))
 
         if peak <= 0:
             return audio
 
-        target_peak = 0.90
-
-        normalized = (
-            audio / peak
-        ) * target_peak
-
-        normalized = np.clip(
-            normalized,
-            -1.0,
-            1.0,
-        )
-
-        return normalized.astype(
-            np.float32
-        )
+        normalized = (audio / peak) * 0.90
+        normalized = np.clip(normalized, -1.0, 1.0)
+        return normalized.astype(np.float32)
 
     @staticmethod
-    def _clean_transcription(
-        text: str,
-    ) -> str:
-
+    def _clean_transcription(text: str) -> str:
         if not text:
             return ""
 
-        text = text.strip()
-
-        text = text.strip(
-            string.punctuation
-        )
-
-        text = " ".join(
-            text.split()
-        )
-
-        return text
+        text = text.strip().strip(string.punctuation)
+        return " ".join(text.split())

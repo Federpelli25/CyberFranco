@@ -25,6 +25,7 @@ from src.audio.microphone_test_worker import (
     MicrophoneTestWorker,
 )
 from src.audio.speech_to_text import (
+    SpeechModelError,
     SpeechToText,
 )
 from src.audio.voice_recognition_worker import (
@@ -126,14 +127,29 @@ class OperatorWindow(QMainWindow):
             False
         )
 
-        self.speech_to_text = SpeechToText(
-            model_size=self.settings.whisper_model,
-            device=self.settings.whisper_device,
-            compute_type=(
-                self.settings.whisper_compute_type
-            ),
-            language=self.settings.language,
-        )
+        try:
+            self.speech_to_text = SpeechToText(
+                model_path=(
+                    self.settings
+                    .resolve_whisper_model_path()
+                ),
+                device=self.settings.whisper_device,
+                compute_type=(
+                    self.settings.whisper_compute_type
+                ),
+                language=self.settings.language,
+            )
+        except SpeechModelError as exc:
+            self.speech_to_text = None
+            self.speech_ready = False
+            self.process_label.setText(
+                "STATO VOCALE: MODELLO WHISPER "
+                "NON DISPONIBILE"
+            )
+            self.transcription_label.setText(str(exc))
+            self.transcription_label.setWordWrap(True)
+            self._update_audio_controls()
+            return
 
         self.process_label.setText(
             "STATO: PRONTO"

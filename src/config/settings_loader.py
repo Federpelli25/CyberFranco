@@ -14,6 +14,7 @@ class AppSettings:
     participants_file: str
     example_participants_file: str
     whisper_model: str
+    whisper_model_path: str
     whisper_device: str
     whisper_compute_type: str
     language: str
@@ -55,6 +56,11 @@ class AppSettings:
             f"'{example_file}'."
         )
 
+    def resolve_whisper_model_path(self) -> Path:
+        return self.resolve_project_path(
+            self.whisper_model_path
+        )
+
 
 class SettingsLoader:
     DEFAULTS: dict[str, Any] = {
@@ -63,6 +69,7 @@ class SettingsLoader:
             "data/partecipanti_example.xlsx"
         ),
         "whisper_model": "small",
+        "whisper_model_path": "models/faster-whisper-small",
         "whisper_device": "cpu",
         "whisper_compute_type": "int8",
         "language": "it",
@@ -102,6 +109,7 @@ class SettingsLoader:
                 values["example_participants_file"]
             ),
             whisper_model=values["whisper_model"],
+            whisper_model_path=values["whisper_model_path"],
             whisper_device=values["whisper_device"],
             whisper_compute_type=(
                 values["whisper_compute_type"]
@@ -224,6 +232,10 @@ class SettingsLoader:
             "example_participants_file",
         )
         cls._require_non_empty_string(values, "whisper_model")
+        cls._require_non_empty_string(
+            values,
+            "whisper_model_path",
+        )
         cls._require_non_empty_string(values, "whisper_device")
         cls._require_non_empty_string(
             values,

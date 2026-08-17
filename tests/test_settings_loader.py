@@ -39,6 +39,10 @@ class SettingsLoaderTests(unittest.TestCase):
 
         self.assertEqual(settings.whisper_model, "small")
         self.assertEqual(
+            settings.whisper_model_path,
+            "models/faster-whisper-small",
+        )
+        self.assertEqual(
             settings.recording_duration_seconds,
             4.0,
         )
@@ -78,6 +82,24 @@ class SettingsLoaderTests(unittest.TestCase):
         self.assertEqual(
             settings.resolve_project_path("assets/teams"),
             self.project_root / "assets" / "teams",
+        )
+        self.assertEqual(
+            settings.resolve_whisper_model_path(),
+            self.project_root
+            / "models"
+            / "faster-whisper-small",
+        )
+
+    def test_whisper_model_path_can_be_overridden(self):
+        self.write_settings(
+            {"whisper_model_path": "custom/whisper"}
+        )
+
+        settings = self.loader.load()
+
+        self.assertEqual(
+            settings.resolve_whisper_model_path(),
+            self.project_root / "custom" / "whisper",
         )
 
     def test_real_participants_file_has_priority(self):

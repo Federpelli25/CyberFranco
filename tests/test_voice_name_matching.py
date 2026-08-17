@@ -53,7 +53,7 @@ recorder = MicrophoneRecorder(
 )
 
 speech_to_text = SpeechToText(
-    model_size="small",
+    model_path="models/faster-whisper-small",
     device="cpu",
     compute_type="int8",
     language="it",

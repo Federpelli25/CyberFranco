@@ -11,6 +11,7 @@ Il file `config/settings.json` configura:
 
 - file Excel reale e file di esempio;
 - modello, device e compute type Whisper;
+- percorso locale del modello Whisper;
 - lingua di trascrizione;
 - durata della registrazione;
 - durata della fase di thinking;
@@ -65,6 +66,7 @@ Sono presenti test automatici per:
 - JSON malformato e file assente;
 - durata, microfono, monitor e fullscreen non validi;
 - passaggio del dispositivo configurato a `sounddevice`.
+- risoluzione del modello Whisper dalla radice del progetto.
 
 ## Limiti attuali
 
