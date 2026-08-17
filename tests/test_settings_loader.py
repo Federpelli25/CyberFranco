@@ -194,6 +194,52 @@ class SettingsLoaderTests(unittest.TestCase):
         ):
             self.loader.load()
 
+    def test_microphone_device_is_saved_preserving_settings(self):
+        self.write_settings(
+            {
+                "whisper_model": "small",
+                "microphone_device": None,
+            }
+        )
+
+        self.loader.save_microphone_device(18)
+
+        saved = json.loads(
+            self.settings_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(saved["microphone_device"], 18)
+        self.assertEqual(saved["whisper_model"], "small")
+
+    def test_default_microphone_selection_is_saved_as_null(self):
+        self.write_settings({"microphone_device": 7})
+
+        self.loader.save_microphone_device(None)
+
+        saved = json.loads(
+            self.settings_path.read_text(encoding="utf-8")
+        )
+        self.assertIsNone(saved["microphone_device"])
+
+    def test_negative_microphone_id_is_rejected(self):
+        self.write_settings({})
+
+        with self.assertRaisesRegex(
+            SettingsError,
+            "microphone_device",
+        ):
+            self.loader.save_microphone_device(-1)
+
+    def test_microphone_name_is_no_longer_accepted_as_id(self):
+        self.write_settings(
+            {"microphone_device": "USB microphone"}
+        )
+
+        with self.assertRaisesRegex(
+            SettingsError,
+            "microphone_device",
+        ):
+            self.loader.load()
+
 
 if __name__ == "__main__":
     unittest.main()

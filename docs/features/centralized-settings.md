@@ -68,7 +68,7 @@ Sono presenti test automatici per:
 
 ## Limiti attuali
 
-La configurazione viene letta soltanto all'avvio: le modifiche al JSON
-richiedono il riavvio dell'app. La console non offre ancora un selettore grafico
-del microfono. Il caricamento del modello Whisper avviene ancora durante la
-costruzione della console operatore.
+La configurazione generale viene letta all'avvio. La selezione del microfono è
+invece salvata e applicata immediatamente dalla console operatore. Il
+caricamento del modello Whisper avviene ancora durante la costruzione della
+console operatore.

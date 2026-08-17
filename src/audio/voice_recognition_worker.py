@@ -14,7 +14,7 @@ class VoiceRecognitionWorker(QObject):
         speech_to_text: SpeechToText,
         hotwords: str,
         duration_seconds: float = 4.0,
-        microphone_device: int | str | None = None,
+        microphone_device: int | None = None,
     ):
         super().__init__()
 

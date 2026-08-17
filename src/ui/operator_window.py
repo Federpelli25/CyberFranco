@@ -13,8 +13,17 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QComboBox,
+    QGroupBox,
 )
 
+from src.audio.audio_device_manager import (
+    AudioDeviceError,
+    AudioDeviceManager,
+)
+from src.audio.microphone_test_worker import (
+    MicrophoneTestWorker,
+)
 from src.audio.speech_to_text import (
     SpeechToText,
 )
@@ -24,7 +33,11 @@ from src.audio.voice_recognition_worker import (
 from src.data.participant_repository import (
     ParticipantRepository,
 )
-from src.config.settings_loader import AppSettings
+from src.config.settings_loader import (
+    AppSettings,
+    SettingsError,
+    SettingsLoader,
+)
 from src.recognition.name_matcher import (
     NameMatcher,
 )
@@ -41,10 +54,21 @@ class OperatorWindow(QMainWindow):
     undo_last_requested = Signal()
     reset_participant_requested = Signal(dict)
 
-    def __init__(self, settings: AppSettings):
+    def __init__(
+        self,
+        settings: AppSettings,
+        settings_loader: SettingsLoader,
+    ):
         super().__init__()
 
         self.settings = settings
+        self.settings_loader = settings_loader
+        self.audio_device_manager = AudioDeviceManager()
+        self.current_microphone_device = (
+            settings.microphone_device
+        )
+        self.input_devices = []
+        self.speech_ready = False
 
         self.setWindowTitle(
             "CyberFranco - Operator Console"
@@ -80,13 +104,17 @@ class OperatorWindow(QMainWindow):
 
         self.processing = False
         self.voice_processing = False
+        self.microphone_test_processing = False
 
         self.voice_thread = None
         self.voice_worker = None
+        self.microphone_test_thread = None
+        self.microphone_test_worker = None
 
         self._build_ui()
         self._connect_events()
 
+        self._refresh_audio_devices(initial_load=True)
         self._load_speech_model()
 
     def _load_speech_model(self):
@@ -110,10 +138,8 @@ class OperatorWindow(QMainWindow):
         self.process_label.setText(
             "STATO: PRONTO"
         )
-
-        self.listen_button.setEnabled(
-            True
-        )
+        self.speech_ready = True
+        self._update_audio_controls()
 
     def _build_ui(self):
         central_widget = QWidget()
@@ -195,6 +221,53 @@ class OperatorWindow(QMainWindow):
                 padding: 15px;
             }
             """
+        )
+
+        microphone_group = QGroupBox(
+            "MICROFONO"
+        )
+        microphone_layout = QVBoxLayout(
+            microphone_group
+        )
+
+        self.microphone_combo = QComboBox()
+        self.microphone_combo.setMinimumHeight(38)
+
+        microphone_button_layout = QHBoxLayout()
+        self.refresh_microphones_button = QPushButton(
+            "AGGIORNA DISPOSITIVI"
+        )
+        self.test_microphone_button = QPushButton(
+            "TEST MICROFONO"
+        )
+        microphone_button_layout.addWidget(
+            self.refresh_microphones_button
+        )
+        microphone_button_layout.addWidget(
+            self.test_microphone_button
+        )
+
+        self.active_microphone_label = QLabel(
+            "Microfono attivo: caricamento..."
+        )
+        self.active_microphone_label.setWordWrap(True)
+
+        self.microphone_test_label = QLabel(
+            "Test microfono: non eseguito"
+        )
+        self.microphone_test_label.setWordWrap(True)
+
+        microphone_layout.addWidget(
+            self.microphone_combo
+        )
+        microphone_layout.addLayout(
+            microphone_button_layout
+        )
+        microphone_layout.addWidget(
+            self.active_microphone_label
+        )
+        microphone_layout.addWidget(
+            self.microphone_test_label
         )
 
         self.search_input = QLineEdit()
@@ -327,6 +400,10 @@ class OperatorWindow(QMainWindow):
         )
 
         main_layout.addWidget(
+            microphone_group
+        )
+
+        main_layout.addWidget(
             self.listen_button
         )
 
@@ -363,6 +440,18 @@ class OperatorWindow(QMainWindow):
             self._start_voice_recognition
         )
 
+        self.microphone_combo.currentIndexChanged.connect(
+            self._microphone_selection_changed
+        )
+
+        self.refresh_microphones_button.clicked.connect(
+            self._refresh_audio_devices
+        )
+
+        self.test_microphone_button.clicked.connect(
+            self._start_microphone_test
+        )
+
         self.search_input.textChanged.connect(
             self._update_results
         )
@@ -397,6 +486,284 @@ class OperatorWindow(QMainWindow):
 
         self.reset_selected_button.clicked.connect(
             self._request_processed_reset
+        )
+
+    def _refresh_audio_devices(
+        self,
+        initial_load: bool = False,
+    ):
+        if (
+            self.processing
+            or self.voice_processing
+            or self.microphone_test_processing
+        ):
+            return
+
+        requested_device = self.current_microphone_device
+
+        try:
+            devices = (
+                self.audio_device_manager
+                .list_input_devices()
+            )
+            default_device = (
+                self.audio_device_manager
+                .get_default_input_device()
+            )
+        except AudioDeviceError as exc:
+            self.input_devices = []
+            self.microphone_combo.clear()
+            self.active_microphone_label.setText(
+                "NESSUN MICROFONO DISPONIBILE"
+            )
+            self.microphone_test_label.setText(str(exc))
+            self._update_audio_controls()
+            return
+
+        self.input_devices = devices
+        self.microphone_combo.blockSignals(True)
+        self.microphone_combo.clear()
+
+        if not devices:
+            self.current_microphone_device = None
+            self.microphone_combo.addItem(
+                "NESSUN MICROFONO DISPONIBILE",
+                None,
+            )
+            self.active_microphone_label.setText(
+                "NESSUN MICROFONO DISPONIBILE"
+            )
+            self.microphone_test_label.setText(
+                "Collega un microfono e premi "
+                "AGGIORNA DISPOSITIVI."
+            )
+            self.microphone_combo.blockSignals(False)
+            self._update_audio_controls()
+            return
+
+        if default_device is not None:
+            self.microphone_combo.addItem(
+                "Predefinito di sistema — "
+                + self.audio_device_manager.format_device_name(
+                    default_device
+                ),
+                None,
+            )
+
+        for device in devices:
+            label = self.audio_device_manager.format_device_name(
+                device
+            )
+            self.microphone_combo.addItem(
+                f"{label} — Device {device['id']}",
+                device["id"],
+            )
+
+        selected_index = self._find_microphone_combo_index(
+            requested_device
+        )
+
+        if requested_device is not None and selected_index < 0:
+            self.current_microphone_device = None
+            selected_index = self._find_microphone_combo_index(None)
+            self.microphone_test_label.setText(
+                "Il microfono salvato non è disponibile. "
+                "È stato selezionato il dispositivo predefinito."
+            )
+            self._save_microphone_selection(None)
+
+        if selected_index < 0:
+            selected_index = 0
+            self.current_microphone_device = (
+                self.microphone_combo.itemData(0)
+            )
+            self._save_microphone_selection(
+                self.current_microphone_device
+            )
+
+        self.microphone_combo.setCurrentIndex(selected_index)
+        self.microphone_combo.blockSignals(False)
+        self.current_microphone_device = (
+            self.microphone_combo.currentData()
+        )
+        self._update_active_microphone_label()
+
+        if not initial_load:
+            self.microphone_test_label.setText(
+                "Elenco dispositivi aggiornato."
+            )
+
+        self._update_audio_controls()
+
+    def _find_microphone_combo_index(
+        self,
+        device_id: int | None,
+    ) -> int:
+        for index in range(self.microphone_combo.count()):
+            if self.microphone_combo.itemData(index) == device_id:
+                return index
+
+        return -1
+
+    def _microphone_selection_changed(self, index: int):
+        if index < 0:
+            return
+
+        if (
+            self.processing
+            or self.voice_processing
+            or self.microphone_test_processing
+        ):
+            return
+
+        self.current_microphone_device = (
+            self.microphone_combo.itemData(index)
+        )
+        self._save_microphone_selection(
+            self.current_microphone_device
+        )
+        self._update_active_microphone_label()
+        self.microphone_test_label.setText(
+            "Microfono selezionato. Esegui un test prima "
+            "dell'evento."
+        )
+        self._update_audio_controls()
+
+    def _save_microphone_selection(
+        self,
+        device_id: int | None,
+    ):
+        try:
+            self.settings_loader.save_microphone_device(
+                device_id
+            )
+        except SettingsError as exc:
+            self.microphone_test_label.setText(
+                f"Scelta attiva ma non salvata: {exc}"
+            )
+            return
+
+        print(f"Microfono selezionato: Device {device_id}")
+
+    def _update_active_microphone_label(self):
+        if self.current_microphone_device is None:
+            try:
+                device = (
+                    self.audio_device_manager
+                    .get_default_input_device()
+                )
+            except AudioDeviceError:
+                device = None
+        else:
+            try:
+                device = self.audio_device_manager.get_device(
+                    self.current_microphone_device
+                )
+            except AudioDeviceError:
+                device = None
+
+        if device is None:
+            self.active_microphone_label.setText(
+                "NESSUN MICROFONO DISPONIBILE"
+            )
+            return
+
+        label = self.audio_device_manager.format_device_name(
+            device
+        )
+        mode = (
+            "predefinito di sistema"
+            if self.current_microphone_device is None
+            else f"Device {device['id']}"
+        )
+        self.active_microphone_label.setText(
+            f"Microfono attivo: {label}\n{mode}"
+        )
+
+    def _start_microphone_test(self):
+        if (
+            self.processing
+            or self.voice_processing
+            or self.microphone_test_processing
+            or not self.input_devices
+        ):
+            return
+
+        self.microphone_test_processing = True
+        self.microphone_test_label.setText(
+            "TEST MICROFONO IN CORSO... Parla normalmente."
+        )
+        self._update_audio_controls()
+
+        self.microphone_test_thread = QThread()
+        self.microphone_test_worker = MicrophoneTestWorker(
+            microphone_device=self.current_microphone_device,
+            duration_seconds=2.0,
+        )
+        self.microphone_test_worker.moveToThread(
+            self.microphone_test_thread
+        )
+        self.microphone_test_thread.started.connect(
+            self.microphone_test_worker.run
+        )
+        self.microphone_test_worker.completed.connect(
+            self._microphone_test_completed
+        )
+        self.microphone_test_worker.failed.connect(
+            self._microphone_test_failed
+        )
+        self.microphone_test_worker.completed.connect(
+            self.microphone_test_thread.quit
+        )
+        self.microphone_test_worker.failed.connect(
+            self.microphone_test_thread.quit
+        )
+        self.microphone_test_thread.finished.connect(
+            self.microphone_test_worker.deleteLater
+        )
+        self.microphone_test_thread.finished.connect(
+            self.microphone_test_thread.deleteLater
+        )
+        self.microphone_test_thread.start()
+
+    def _microphone_test_completed(self, result: dict):
+        self.microphone_test_processing = False
+        self.microphone_test_label.setText(
+            f"{result['status']} — "
+            f"Peak: {result['peak']:.3f} — "
+            f"RMS: {result['rms']:.3f}"
+        )
+        self._update_audio_controls()
+
+    def _microphone_test_failed(self, error_message: str):
+        self.microphone_test_processing = False
+        self.microphone_test_label.setText(
+            "Test fallito. "
+            f"{error_message}"
+        )
+        self._update_audio_controls()
+
+    def _update_audio_controls(self):
+        busy = (
+            self.processing
+            or self.voice_processing
+            or self.microphone_test_processing
+        )
+        has_microphone = bool(self.input_devices)
+
+        self.microphone_combo.setEnabled(
+            has_microphone and not busy
+        )
+        self.refresh_microphones_button.setEnabled(
+            not busy
+        )
+        self.test_microphone_button.setEnabled(
+            has_microphone and not busy
+        )
+        self.listen_button.setEnabled(
+            has_microphone
+            and self.speech_ready
+            and not busy
         )
 
     def update_tracking_status(
@@ -511,10 +878,42 @@ class OperatorWindow(QMainWindow):
         if (
             self.processing
             or self.voice_processing
+            or self.microphone_test_processing
         ):
             return
 
+        if not self.input_devices:
+            self.process_label.setText(
+                "NESSUN MICROFONO DISPONIBILE"
+            )
+            self._update_audio_controls()
+            return
+
+        if self.current_microphone_device is not None:
+            try:
+                device_available = (
+                    self.audio_device_manager
+                    .is_device_available(
+                        self.current_microphone_device
+                    )
+                )
+            except AudioDeviceError:
+                device_available = False
+
+            if not device_available:
+                self.process_label.setText(
+                    "Microfono non disponibile. "
+                    "Seleziona un altro dispositivo."
+                )
+                self.microphone_test_label.setText(
+                    "Il dispositivo selezionato è stato "
+                    "scollegato. Premi AGGIORNA DISPOSITIVI."
+                )
+                self._update_audio_controls()
+                return
+
         self.voice_processing = True
+        self._update_audio_controls()
 
         self.transcription_label.setText(
             "Voce riconosciuta: ascolto..."
@@ -559,7 +958,7 @@ class OperatorWindow(QMainWindow):
                     .recording_duration_seconds
                 ),
                 microphone_device=(
-                    self.settings.microphone_device
+                    self.current_microphone_device
                 ),
             )
         )
@@ -692,7 +1091,12 @@ class OperatorWindow(QMainWindow):
         )
 
         self.transcription_label.setText(
-            "Errore durante il riconoscimento vocale"
+            "Microfono non disponibile. "
+            "Seleziona un altro dispositivo."
+        )
+
+        self.process_label.setText(
+            f"ERRORE MICROFONO: {error_message}"
         )
 
         self.listening_failed.emit()
@@ -702,10 +1106,6 @@ class OperatorWindow(QMainWindow):
     def _enable_manual_controls(self):
         if self.processing:
             return
-
-        self.listen_button.setEnabled(
-            True
-        )
 
         self.search_input.setEnabled(
             True
@@ -723,6 +1123,8 @@ class OperatorWindow(QMainWindow):
             self.confirm_button.setEnabled(
                 True
             )
+
+        self._update_audio_controls()
 
         self.search_input.setFocus()
 
@@ -921,8 +1323,10 @@ class OperatorWindow(QMainWindow):
         )
 
         self.listen_button.setEnabled(
-            not processing
+            False
         )
+
+        self._update_audio_controls()
 
         if processing:
             self.confirm_button.setEnabled(
@@ -971,9 +1375,7 @@ class OperatorWindow(QMainWindow):
             True
         )
 
-        self.listen_button.setEnabled(
-            True
-        )
+        self._update_audio_controls()
 
         self.search_input.setFocus()
 

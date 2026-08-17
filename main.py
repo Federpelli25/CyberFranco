@@ -20,7 +20,8 @@ def main() -> int:
     app = QApplication(sys.argv)
 
     try:
-        settings = SettingsLoader().load()
+        settings_loader = SettingsLoader()
+        settings = settings_loader.load()
     except SettingsError as exc:
         QMessageBox.critical(
             None,
@@ -30,7 +31,10 @@ def main() -> int:
         return 1
 
     state_manager = StateManager()
-    operator_window = OperatorWindow(settings)
+    operator_window = OperatorWindow(
+        settings,
+        settings_loader,
+    )
     public_window = PublicWindow(settings)
     participant_tracker = ParticipantTracker(
         operator_window.participants

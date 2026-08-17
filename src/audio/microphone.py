@@ -1,5 +1,11 @@
+from typing import Any
+
 import numpy as np
 import sounddevice as sd
+
+
+class MicrophoneError(RuntimeError):
+    """Errore di acquisizione audio leggibile dall'operatore."""
 
 
 class MicrophoneRecorder:
@@ -8,41 +14,107 @@ class MicrophoneRecorder:
         self,
         sample_rate: int = 16000,
         channels: int = 1,
-        device: int | str | None = None,
+        device: int | None = None,
     ):
         self.sample_rate = sample_rate
         self.channels = channels
         self.device = device
+        self.last_device_info: dict[str, Any] | None = None
+
+    def get_device_info(self) -> dict[str, Any]:
+        try:
+            info = sd.query_devices(
+                self.device,
+                kind="input",
+            )
+        except Exception as exc:
+            raise MicrophoneError(
+                "Microfono non disponibile. "
+                "Seleziona un altro dispositivo. "
+                f"Dettaglio: {exc}"
+            ) from exc
+
+        max_input_channels = int(
+            info.get("max_input_channels", 0)
+        )
+
+        if max_input_channels <= 0:
+            raise MicrophoneError(
+                "Il dispositivo selezionato non supporta "
+                "l'acquisizione audio."
+            )
+
+        if self.channels > max_input_channels:
+            raise MicrophoneError(
+                "Il microfono selezionato non supporta "
+                f"{self.channels} canali di input."
+            )
+
+        self.last_device_info = {
+            "id": self._resolved_device_id(),
+            "name": str(info.get("name", "Microfono sconosciuto")),
+            "max_input_channels": max_input_channels,
+            "default_samplerate": float(
+                info.get("default_samplerate", 0.0)
+            ),
+        }
+
+        return dict(self.last_device_info)
+
+    def get_last_device_info(self) -> dict[str, Any] | None:
+        if self.last_device_info is None:
+            return None
+
+        return dict(self.last_device_info)
+
+    def _resolved_device_id(self) -> int | None:
+        if self.device is not None:
+            return self.device
+
+        try:
+            default_device = sd.default.device
+            return int(default_device[0])
+        except (IndexError, TypeError, ValueError):
+            return None
 
     def record(
         self,
         duration_seconds: float,
     ) -> np.ndarray:
-
         if duration_seconds <= 0:
             raise ValueError(
-                "La durata della registrazione deve essere maggiore di zero."
+                "La durata della registrazione deve essere "
+                "maggiore di zero."
             )
 
-        frames = int(
-            duration_seconds * self.sample_rate
-        )
+        device_info = self.get_device_info()
+        frames = int(duration_seconds * self.sample_rate)
 
         print(
-            f"Registrazione avviata "
-            f"({duration_seconds:.1f} secondi)..."
+            "Registrazione avviata "
+            f"({duration_seconds:.1f} secondi) con "
+            f"'{device_info['name']}'..."
         )
 
-        audio = sd.rec(
-            frames,
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            dtype="float32",
-            blocking=True,
-            device=self.device,
-        )
+        try:
+            audio = sd.rec(
+                frames,
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                dtype="float32",
+                blocking=True,
+                device=self.device,
+            )
+        except Exception as exc:
+            print(f"Errore acquisizione microfono: {exc}")
+            raise MicrophoneError(
+                "Microfono non disponibile o acquisizione fallita. "
+                "Seleziona un altro dispositivo e aggiorna la lista. "
+                f"Dettaglio: {exc}"
+            ) from exc
 
         print("Registrazione completata.")
+        audio = np.asarray(audio, dtype=np.float32)
 
         if self.channels == 1:
             audio = audio.reshape(-1)

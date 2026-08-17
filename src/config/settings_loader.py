@@ -19,7 +19,7 @@ class AppSettings:
     language: str
     recording_duration_seconds: float
     thinking_duration_ms: int
-    microphone_device: int | str | None
+    microphone_device: int | None
     public_display_monitor: int
     public_display_fullscreen: bool
 
@@ -122,6 +122,53 @@ class SettingsLoader:
             ],
         )
 
+    def save_microphone_device(
+        self,
+        device_id: int | None,
+        settings_path: str | Path | None = None,
+    ) -> None:
+        if (
+            device_id is not None
+            and (
+                isinstance(device_id, bool)
+                or not isinstance(device_id, int)
+                or device_id < 0
+            )
+        ):
+            raise SettingsError(
+                "'microphone_device' deve essere null "
+                "oppure un ID intero maggiore o uguale a zero."
+            )
+
+        path = self._resolve_settings_path(settings_path)
+        values = self._read_json(path)
+        values["microphone_device"] = device_id
+        temporary_path = path.with_suffix(
+            f"{path.suffix}.tmp"
+        )
+
+        try:
+            temporary_path.write_text(
+                json.dumps(
+                    values,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            temporary_path.replace(path)
+        except OSError as exc:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+            raise SettingsError(
+                "Impossibile salvare il microfono nel file "
+                f"di configurazione '{path}': {exc}"
+            ) from exc
+
     def _resolve_settings_path(
         self,
         settings_path: str | Path | None,
@@ -214,18 +261,13 @@ class SettingsLoader:
             microphone is not None
             and (
                 isinstance(microphone, bool)
-                or not isinstance(microphone, (int, str))
+                or not isinstance(microphone, int)
+                or microphone < 0
             )
         ):
             raise SettingsError(
                 "'microphone_device' deve essere null, "
-                "un indice intero o il nome di un dispositivo."
-            )
-
-        if isinstance(microphone, str) and not microphone.strip():
-            raise SettingsError(
-                "'microphone_device' non può essere una "
-                "stringa vuota."
+                "oppure un ID intero maggiore o uguale a zero."
             )
 
         monitor = values["public_display_monitor"]
