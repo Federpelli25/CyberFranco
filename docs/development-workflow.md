@@ -1,17 +1,14 @@
-# Workflow di sviluppo
+# Operazioni Git
 
-Le regole operative complete sono definite in `dev-guides/README.md` e devono
-essere lette prima di modificare il progetto.
+Le operazioni Git non fanno parte dei quality gate automatici definiti nelle
+Dev-Guides.
 
-Ogni feature richiede:
+Branch, commit, push e merge devono essere eseguiti soltanto quando richiesti
+esplicitamente dall'utente nel prompt corrente.
 
-- un branch dedicato `feature/nome-feature`, creato da `Dev` aggiornato;
-- codice e test della feature;
-- un documento in `docs/features/nome-feature.md`;
-- test rilevanti superati;
-- commit e push del feature branch;
-- merge del branch in `Dev`;
-- push di `Dev` dopo il merge.
+Una richiesta di sviluppo non autorizza implicitamente:
 
-`main` non viene modificato automaticamente e contiene soltanto versioni
-stabili verificate.
+- la creazione o il cambio di branch;
+- la creazione di commit;
+- il push verso il repository remoto;
+- il merge in `Dev` o `main`.
