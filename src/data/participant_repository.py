@@ -2,6 +2,9 @@ import logging
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
+
+from src.core.exceptions import ParticipantDataError
 
 
 logger = logging.getLogger(__name__)
@@ -9,33 +12,16 @@ logger = logging.getLogger(__name__)
 
 class ParticipantRepository:
 
-    REQUIRED_COLUMNS = {
-        "Nome",
-        "Cognome",
-        "Squadra",
-    }
+    REQUIRED_COLUMNS = {"Nome", "Cognome", "Squadra"}
+    DEFAULT_REAL_FILE = Path("data/partecipanti.xlsx")
+    DEFAULT_EXAMPLE_FILE = Path("data/partecipanti_example.xlsx")
 
-    DEFAULT_REAL_FILE = Path(
-        "data/partecipanti.xlsx"
-    )
-
-    DEFAULT_EXAMPLE_FILE = Path(
-        "data/partecipanti_example.xlsx"
-    )
-
-    def __init__(
-        self,
-        file_path: str | Path | None = None,
-    ):
-        if file_path is None:
-            self.file_path = (
-                self._resolve_default_file()
-            )
-        else:
-            self.file_path = Path(
-                file_path
-            )
-
+    def __init__(self, file_path: str | Path | None = None):
+        self.file_path = (
+            self._resolve_default_file()
+            if file_path is None
+            else Path(file_path)
+        )
         self.participants = []
 
     def load(self) -> list[dict]:
@@ -43,157 +29,132 @@ class ParticipantRepository:
 
         if not self.file_path.exists():
             logger.error("Participants file not found: %s", self.file_path)
-            raise FileNotFoundError(
-                "File partecipanti non trovato: "
-                f"{self.file_path}"
+            raise ParticipantDataError(
+                "FILE PARTECIPANTI NON TROVATO\n\n"
+                f"Percorso: {self.file_path}"
             )
-
-        workbook = load_workbook(
-            self.file_path,
-            read_only=True,
-            data_only=True,
-        )
 
         try:
-            worksheet = workbook.active
-
-            rows = worksheet.iter_rows(
-                values_only=True
+            workbook = load_workbook(
+                self.file_path,
+                read_only=True,
+                data_only=True,
             )
+        except (OSError, InvalidFileException, ValueError) as exc:
+            logger.exception("Participants workbook cannot be read")
+            raise ParticipantDataError(
+                "FILE PARTECIPANTI NON VALIDO\n\n"
+                "Il file non è leggibile oppure è danneggiato."
+            ) from exc
+
+        try:
+            rows = workbook.active.iter_rows(values_only=True)
 
             try:
-                headers = next(
-                    rows
-                )
-            except StopIteration:
+                headers = next(rows)
+            except StopIteration as exc:
                 logger.error("Participants workbook is empty: %s", self.file_path)
-                raise ValueError(
+                raise ParticipantDataError(
+                    "FILE PARTECIPANTI NON VALIDO\n\n"
                     "Il file Excel è vuoto."
-                )
+                ) from exc
 
             headers = [
-                (
-                    str(header).strip()
-                    if header is not None
-                    else ""
-                )
+                str(header).strip() if header is not None else ""
                 for header in headers
             ]
-
-            missing_columns = (
-                self.REQUIRED_COLUMNS
-                - set(headers)
-            )
+            missing_columns = self.REQUIRED_COLUMNS - set(headers)
 
             if missing_columns:
-                missing_text = ", ".join(
-                    sorted(
-                        missing_columns
-                    )
-                )
-
+                missing_text = ", ".join(sorted(missing_columns))
                 logger.error(
                     "Participants workbook missing columns: %s",
                     missing_text,
                 )
-
-                raise ValueError(
-                    "Colonne mancanti nel file Excel: "
-                    f"{missing_text}"
+                raise ParticipantDataError(
+                    "FILE PARTECIPANTI NON VALIDO\n\n"
+                    f"Colonne mancanti: {missing_text}."
                 )
 
-            column_indexes = {
-                column_name:
-                    headers.index(
-                        column_name
-                    )
-                for column_name
-                in self.REQUIRED_COLUMNS
+            indexes = {
+                column: headers.index(column)
+                for column in self.REQUIRED_COLUMNS
             }
-
             participants = []
+            seen_names = set()
 
-            for row in rows:
-                nome = row[
-                    column_indexes[
-                        "Nome"
-                    ]
-                ]
-
-                cognome = row[
-                    column_indexes[
-                        "Cognome"
-                    ]
-                ]
-
-                squadra = row[
-                    column_indexes[
-                        "Squadra"
-                    ]
-                ]
-
-                if (
-                    not nome
-                    or not cognome
-                    or not squadra
-                ):
-                    continue
-
-                participant = {
-                    "nome":
-                        str(nome).strip(),
-                    "cognome":
-                        str(cognome).strip(),
-                    "squadra":
-                        str(squadra)
-                        .strip(),
+            for row_number, row in enumerate(rows, start=2):
+                values = {
+                    column: row[indexes[column]]
+                    if indexes[column] < len(row)
+                    else None
+                    for column in self.REQUIRED_COLUMNS
                 }
 
-                participant[
-                    "nome_completo"
-                ] = (
-                    f"{participant['nome']} "
-                    f"{participant['cognome']}"
+                if not any(values.values()):
+                    continue
+
+                if any(value is None or not str(value).strip() for value in values.values()):
+                    logger.error(
+                        "Incomplete participant row: file=%s row=%d",
+                        self.file_path,
+                        row_number,
+                    )
+                    raise ParticipantDataError(
+                        "FILE PARTECIPANTI NON VALIDO\n\n"
+                        f"La riga {row_number} contiene nome, cognome "
+                        "o squadra vuoti."
+                    )
+
+                participant = {
+                    "nome": str(values["Nome"]).strip(),
+                    "cognome": str(values["Cognome"]).strip(),
+                    "squadra": str(values["Squadra"]).strip(),
+                }
+                participant["nome_completo"] = (
+                    f"{participant['nome']} {participant['cognome']}"
+                )
+                participant["search_name"] = (
+                    participant["nome_completo"].casefold()
                 )
 
-                participant[
-                    "search_name"
-                ] = (
-                    participant[
-                        "nome_completo"
-                    ]
-                    .lower()
+                if participant["search_name"] in seen_names:
+                    logger.error(
+                        "Duplicate participant: file=%s row=%d name=%s",
+                        self.file_path,
+                        row_number,
+                        participant["nome_completo"],
+                    )
+                    raise ParticipantDataError(
+                        "FILE PARTECIPANTI NON VALIDO\n\n"
+                        "Partecipante duplicato: "
+                        f"{participant['nome_completo']}."
+                    )
+
+                seen_names.add(participant["search_name"])
+                participants.append(participant)
+
+            if not participants:
+                logger.error("Participants workbook has no valid data rows")
+                raise ParticipantDataError(
+                    "FILE PARTECIPANTI NON VALIDO\n\n"
+                    "Non sono presenti partecipanti validi."
                 )
 
-                participants.append(
-                    participant
-                )
-
-            self.participants = (
-                participants
-            )
-
+            self.participants = participants
             logger.info("Participants loaded: %d", len(participants))
-
             return participants
-
         finally:
             workbook.close()
 
     @classmethod
-    def _resolve_default_file(
-        cls,
-    ) -> Path:
-
+    def _resolve_default_file(cls) -> Path:
         if cls.DEFAULT_REAL_FILE.exists():
             return cls.DEFAULT_REAL_FILE
-
         if cls.DEFAULT_EXAMPLE_FILE.exists():
             return cls.DEFAULT_EXAMPLE_FILE
-
-        raise FileNotFoundError(
-            "Nessun file partecipanti trovato. "
-            "Inserire 'data/partecipanti.xlsx' "
-            "oppure "
+        raise ParticipantDataError(
+            "Nessun file partecipanti trovato. Inserire "
+            "'data/partecipanti.xlsx' oppure "
             "'data/partecipanti_example.xlsx'."
         )

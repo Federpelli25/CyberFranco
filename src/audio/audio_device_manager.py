@@ -3,12 +3,10 @@ from typing import Any
 
 import sounddevice as sd
 
+from src.core.exceptions import AudioDeviceError
+
 
 logger = logging.getLogger(__name__)
-
-
-class AudioDeviceError(RuntimeError):
-    """Errore leggibile durante l'interrogazione dei device audio."""
 
 
 class AudioDeviceManager:
@@ -20,8 +18,7 @@ class AudioDeviceManager:
         except Exception as exc:
             logger.exception("Unable to enumerate audio devices")
             raise AudioDeviceError(
-                "Impossibile leggere i dispositivi audio: "
-                f"{exc}"
+                "Impossibile leggere i dispositivi audio."
             ) from exc
 
         input_devices = []
@@ -65,8 +62,7 @@ class AudioDeviceManager:
         except Exception as exc:
             logger.exception("Unable to determine default input device")
             raise AudioDeviceError(
-                "Impossibile determinare il microfono predefinito: "
-                f"{exc}"
+                "Impossibile determinare il microfono predefinito."
             ) from exc
 
         if device_id is None:

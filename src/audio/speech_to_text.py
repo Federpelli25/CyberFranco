@@ -5,12 +5,13 @@ from pathlib import Path
 import numpy as np
 from faster_whisper import WhisperModel
 
+from src.core.exceptions import (
+    SpeechModelError,
+    SpeechRecognitionError,
+)
+
 
 logger = logging.getLogger(__name__)
-
-
-class SpeechModelError(RuntimeError):
-    """Errore leggibile relativo al modello Whisper locale."""
 
 
 class SpeechToText:
@@ -50,7 +51,7 @@ class SpeechToText:
                 "MODELLO WHISPER NON CARICABILE\n\n"
                 "Percorso configurato:\n"
                 f"{self.model_path}\n\n"
-                f"Dettaglio: {exc}"
+                "Usa la ricerca manuale e consulta il log."
             ) from exc
 
         logger.info("Whisper model loaded")
@@ -143,36 +144,43 @@ class SpeechToText:
             "di una persona italiana."
         )
 
-        segments, _ = self.model.transcribe(
-            audio,
-            language=self.language,
-            task="transcribe",
-            beam_size=5,
-            temperature=0.0,
-            vad_filter=True,
-            vad_parameters={
-                "threshold": 0.35,
-                "min_speech_duration_ms": 150,
-                "min_silence_duration_ms": 250,
-            },
-            condition_on_previous_text=False,
-            initial_prompt=initial_prompt,
-            hotwords=hotwords,
-        )
-
-        text_parts = []
-
-        for segment in segments:
-            text = segment.text.strip()
-            logger.debug(
-                "Whisper segment: %.2fs-%.2fs text=%r",
-                segment.start,
-                segment.end,
-                text,
+        try:
+            segments, _ = self.model.transcribe(
+                audio,
+                language=self.language,
+                task="transcribe",
+                beam_size=5,
+                temperature=0.0,
+                vad_filter=True,
+                vad_parameters={
+                    "threshold": 0.35,
+                    "min_speech_duration_ms": 150,
+                    "min_silence_duration_ms": 250,
+                },
+                condition_on_previous_text=False,
+                initial_prompt=initial_prompt,
+                hotwords=hotwords,
             )
 
-            if text:
-                text_parts.append(text)
+            text_parts = []
+
+            for segment in segments:
+                text = segment.text.strip()
+                logger.debug(
+                    "Whisper segment: %.2fs-%.2fs text=%r",
+                    segment.start,
+                    segment.end,
+                    text,
+                )
+
+                if text:
+                    text_parts.append(text)
+        except Exception as exc:
+            logger.exception("Whisper transcription failed")
+            raise SpeechRecognitionError(
+                "ERRORE DI RICONOSCIMENTO. "
+                "Riprova oppure usa la ricerca manuale."
+            ) from exc
 
         transcription = " ".join(text_parts).strip()
         cleaned_transcription = self._clean_transcription(

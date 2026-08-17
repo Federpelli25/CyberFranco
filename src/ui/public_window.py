@@ -422,6 +422,7 @@ class PublicWindow(QMainWindow):
         )
 
         if pixmap.isNull():
+            logger.warning("Team logo is invalid: %s", logo_path)
             self.logo_label.clear()
 
             self.logo_label.setVisible(

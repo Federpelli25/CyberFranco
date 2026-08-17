@@ -32,6 +32,7 @@ class FakeOperatorWindow:
         self.processed_participants = []
         self.tracking_messages = []
         self.already_processed = []
+        self.errors = []
         self.reset_count = 0
 
     def set_processing(self, processing):
@@ -57,6 +58,9 @@ class FakeOperatorWindow:
 
     def show_already_processed(self, participant):
         self.already_processed.append(participant)
+
+    def show_error(self, message):
+        self.errors.append(message)
 
     def reset_for_next_participant(self):
         self.reset_count += 1

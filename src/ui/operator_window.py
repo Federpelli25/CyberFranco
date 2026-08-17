@@ -748,6 +748,9 @@ class OperatorWindow(QMainWindow):
         self.microphone_test_thread.finished.connect(
             self.microphone_test_thread.deleteLater
         )
+        self.microphone_test_thread.finished.connect(
+            self._microphone_test_thread_finished
+        )
         self.microphone_test_thread.start()
 
     def _microphone_test_completed(self, result: dict):
@@ -762,10 +765,19 @@ class OperatorWindow(QMainWindow):
     def _microphone_test_failed(self, error_message: str):
         self.microphone_test_processing = False
         self.microphone_test_label.setText(
-            "Test fallito. "
-            f"{error_message}"
+            "TEST MICROFONO FALLITO. "
+            "Aggiorna i dispositivi e riprova."
         )
         self._update_audio_controls()
+
+    def _microphone_test_thread_finished(self):
+        if self.microphone_test_processing:
+            logger.error("Microphone test thread ended without a result")
+            self.microphone_test_processing = False
+            self.microphone_test_label.setText("TEST MICROFONO FALLITO")
+            self._update_audio_controls()
+        self.microphone_test_worker = None
+        self.microphone_test_thread = None
 
     def _update_audio_controls(self):
         busy = (
@@ -898,6 +910,17 @@ class OperatorWindow(QMainWindow):
             message
         )
 
+    def show_status(self, message: str):
+        self.process_label.setText(message)
+
+    def show_warning(self, message: str):
+        logger.warning("Operator warning: %s", message)
+        self.show_status(message)
+
+    def show_error(self, message: str):
+        logger.error("Operator error: %s", message)
+        self.show_status(message)
+
     def _start_voice_recognition(self):
         if (
             self.processing
@@ -911,6 +934,11 @@ class OperatorWindow(QMainWindow):
             self.process_label.setText(
                 "NESSUN MICROFONO DISPONIBILE"
             )
+            self._update_audio_controls()
+            return
+
+        if not self.speech_ready or self.speech_to_text is None:
+            self.show_warning("MODELLO WHISPER NON DISPONIBILE")
             self._update_audio_controls()
             return
 
@@ -1028,8 +1056,21 @@ class OperatorWindow(QMainWindow):
         self.voice_thread.finished.connect(
             self.voice_thread.deleteLater
         )
+        self.voice_thread.finished.connect(
+            self._voice_thread_finished
+        )
 
         self.voice_thread.start()
+
+    def _voice_thread_finished(self):
+        if self.voice_processing:
+            logger.error("Voice thread ended without a result")
+            self.voice_processing = False
+            self.show_error("ERRORE DI RICONOSCIMENTO")
+            self.listening_failed.emit()
+            self._enable_manual_controls()
+        self.voice_worker = None
+        self.voice_thread = None
 
     def _voice_recognition_completed(
         self,
@@ -1136,12 +1177,20 @@ class OperatorWindow(QMainWindow):
         )
 
         self.process_label.setText(
-            f"ERRORE MICROFONO: {error_message}"
+            "ERRORE DI RICONOSCIMENTO"
         )
 
         self.listening_failed.emit()
 
         self._enable_manual_controls()
+
+    def closeEvent(self, event):
+        """Chiude in modo controllato eventuali thread ancora attivi."""
+        for thread in (self.voice_thread, self.microphone_test_thread):
+            if thread is not None and thread.isRunning():
+                thread.quit()
+                thread.wait(3000)
+        super().closeEvent(event)
 
     def _enable_manual_controls(self):
         if self.processing:

@@ -141,3 +141,9 @@ Il download iniziale richiede Internet ed è intenzionalmente manuale. Il modell
 non viene incluso nel repository. Il caricamento avviene ancora nel thread GUI
 all'avvio e può richiedere alcuni secondi, ma viene eseguito una sola volta e la
 stessa istanza viene riutilizzata per tutte le trascrizioni.
+
+## Recovery runtime
+
+Gli errori CTranslate2 durante una trascrizione sono convertiti in un errore
+applicativo, terminano il worker e riportano il flusso a `IDLE`; la ricerca
+manuale resta disponibile. Vedere `docs/features/error-handling.md`.

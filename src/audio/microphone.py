@@ -4,11 +4,13 @@ from typing import Any
 import numpy as np
 import sounddevice as sd
 
+from src.core.exceptions import AudioDeviceError
+
 
 logger = logging.getLogger(__name__)
 
 
-class MicrophoneError(RuntimeError):
+class MicrophoneError(AudioDeviceError):
     """Errore di acquisizione audio leggibile dall'operatore."""
 
 
@@ -35,8 +37,7 @@ class MicrophoneRecorder:
             logger.exception("Unable to query selected microphone")
             raise MicrophoneError(
                 "Microfono non disponibile. "
-                "Seleziona un altro dispositivo. "
-                f"Dettaglio: {exc}"
+                "Seleziona un altro dispositivo."
             ) from exc
 
         max_input_channels = int(
@@ -114,8 +115,7 @@ class MicrophoneRecorder:
             logger.exception("Microphone recording failed")
             raise MicrophoneError(
                 "Microfono non disponibile o acquisizione fallita. "
-                "Seleziona un altro dispositivo e aggiorna la lista. "
-                f"Dettaglio: {exc}"
+                "Seleziona un altro dispositivo e aggiorna la lista."
             ) from exc
 
         logger.info("Recording completed: frames=%d", frames)

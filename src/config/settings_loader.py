@@ -3,8 +3,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.core.exceptions import ConfigurationError
 
-class SettingsError(ValueError):
+
+class SettingsError(ConfigurationError, ValueError):
     """Errore di configurazione leggibile dall'operatore."""
 
 

@@ -106,3 +106,10 @@ Gli ID PortAudio possono cambiare se Windows modifica l'ordine dei dispositivi;
 in quel caso viene applicato il fallback. I duplicati tra host API vengono
 mostrati intenzionalmente. Le soglie RMS non sostituiscono una calibrazione
 professionale e possono essere adattate in una fase successiva.
+
+## Recovery runtime
+
+La gestione errori centralizzata mantiene attiva la ricerca manuale se un device
+non è più disponibile, se PortAudio fallisce o se un worker termina in errore.
+La console torna utilizzabile e consente di aggiornare o cambiare microfono. I
+dettagli sono descritti in `docs/features/error-handling.md`.

@@ -49,6 +49,7 @@ class SortingController(QObject):
         self.settings = settings
 
         self.current_participant = None
+        self._flow_token = 0
 
         self._connect_events()
         self._update_tracking_ui()
@@ -67,7 +68,7 @@ class SortingController(QObject):
         )
 
         self.operator_window.listening_failed.connect(
-            self._return_to_idle
+            self.recover_to_idle
         )
 
         self.operator_window.undo_last_requested.connect(
@@ -102,11 +103,29 @@ class SortingController(QObject):
         self.public_window.show_waiting_confirmation()
 
     def _return_to_idle(self):
-        self.state_manager.set_state(
-            AppState.IDLE
-        )
+        self.recover_to_idle()
 
-        self.public_window.show_idle()
+    def recover_to_idle(self, message: str | None = None):
+        """Invalida il flusso corrente e ripristina una UI utilizzabile."""
+        previous_state = self.state_manager.state
+        self._flow_token += 1
+        self.current_participant = None
+        self.state_manager.set_state(AppState.IDLE)
+
+        try:
+            self.public_window.show_idle()
+        except Exception:
+            logger.exception("Public display recovery failed")
+
+        self.operator_window.set_processing(False)
+        if message:
+            self.operator_window.show_error(message)
+
+        logger.warning(
+            "Application recovered to IDLE: previous_state=%s message=%s",
+            previous_state.value,
+            message or "-",
+        )
 
     def start_sorting(
         self,
@@ -146,6 +165,8 @@ class SortingController(QObject):
         self.current_participant = (
             participant
         )
+        self._flow_token += 1
+        flow_token = self._flow_token
         logger.info(
             "Participant confirmed: %s",
             participant["nome_completo"],
@@ -159,16 +180,29 @@ class SortingController(QObject):
             AppState.THINKING
         )
 
-        self.public_window.show_thinking()
+        try:
+            self.public_window.show_thinking()
+        except Exception:
+            logger.exception("Thinking display failed")
+            self.recover_to_idle("ERRORE DISPLAY PUBBLICO")
+            return
         logger.info("Thinking started")
 
         QTimer.singleShot(
             self.settings.thinking_duration_ms,
-            self._start_reveal,
+            lambda: self._start_reveal(flow_token),
         )
 
-    def _start_reveal(self):
-        if self.current_participant is None:
+    def _start_reveal(self, flow_token: int | None = None):
+        if (
+            self.current_participant is None
+            or self.state_manager.state != AppState.THINKING
+            or (
+                flow_token is not None
+                and flow_token != self._flow_token
+            )
+        ):
+            logger.warning("Stale reveal callback ignored")
             return
 
         participant = (
@@ -183,10 +217,14 @@ class SortingController(QObject):
             participant["squadra"],
         )
 
-        self.public_window.show_team(
-            participant["nome_completo"],
-            participant["squadra"],
-        )
+        try:
+            self.public_window.show_team(
+                participant["nome_completo"],
+                participant["squadra"],
+            )
+        except Exception:
+            logger.exception("Team reveal failed")
+            self.recover_to_idle("ERRORE DISPLAY PUBBLICO")
 
     def _finish_sorting(self):
         if self.current_participant is None:
@@ -196,9 +234,12 @@ class SortingController(QObject):
             self.current_participant
         )
 
-        self.participant_tracker.mark_processed(
-            participant
-        )
+        try:
+            self.participant_tracker.mark_processed(participant)
+        except Exception:
+            logger.exception("Unable to complete participant assignment")
+            self.recover_to_idle("ERRORE ASSEGNAZIONE")
+            return
         logger.info(
             "Assignment completed: %s; team=%s",
             participant["nome_completo"],
@@ -206,6 +247,7 @@ class SortingController(QObject):
         )
 
         self.current_participant = None
+        self._flow_token += 1
 
         self._update_tracking_ui()
 
