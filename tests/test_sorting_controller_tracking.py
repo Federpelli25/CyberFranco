@@ -1,5 +1,8 @@
 import unittest
 from unittest.mock import patch
+from pathlib import Path
+
+from src.config.settings_loader import AppSettings
 from src.core.participant_tracker import ParticipantTracker
 from src.core.sorting_controller import SortingController
 from src.core.state_manager import AppState, StateManager
@@ -115,11 +118,28 @@ class SortingControllerTrackingTests(unittest.TestCase):
         self.operator = FakeOperatorWindow()
         self.public = FakePublicWindow()
         self.state_manager = StateManager()
+        self.settings = AppSettings(
+            project_root=Path.cwd(),
+            participants_file="data/partecipanti.xlsx",
+            example_participants_file=(
+                "data/partecipanti_example.xlsx"
+            ),
+            whisper_model="small",
+            whisper_device="cpu",
+            whisper_compute_type="int8",
+            language="it",
+            recording_duration_seconds=4.0,
+            thinking_duration_ms=1200,
+            microphone_device=None,
+            public_display_monitor=1,
+            public_display_fullscreen=False,
+        )
         self.controller = SortingController(
             operator_window=self.operator,
             public_window=self.public,
             state_manager=self.state_manager,
             participant_tracker=self.tracker,
+            settings=self.settings,
         )
 
     def test_initial_tracking_status_is_sent_to_operator(self):

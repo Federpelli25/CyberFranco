@@ -12,20 +12,24 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
     QLabel,
     QGraphicsOpacityEffect,
 )
+from src.config.settings_loader import AppSettings
 
 
 class PublicWindow(QMainWindow):
 
     reveal_finished = Signal()
 
-    def __init__(self):
+    def __init__(self, settings: AppSettings):
         super().__init__()
+
+        self.settings = settings
 
         self.setWindowTitle(
             "CyberFranco - Public Display"
@@ -36,7 +40,7 @@ class PublicWindow(QMainWindow):
             720,
         )
 
-        self.teams_root = Path(
+        self.teams_root = settings.resolve_project_path(
             "assets/teams"
         )
 
@@ -45,6 +49,24 @@ class PublicWindow(QMainWindow):
 
         self._build_ui()
         self.show_idle()
+
+    def show_configured(self):
+        screens = QApplication.screens()
+
+        monitor_index = self.settings.public_display_monitor
+
+        if monitor_index >= len(screens):
+            monitor_index = 0
+
+        if screens:
+            self.setGeometry(
+                screens[monitor_index].availableGeometry()
+            )
+
+        if self.settings.public_display_fullscreen:
+            self.showFullScreen()
+        else:
+            self.show()
 
     def _build_ui(self):
         self.central_widget = QWidget()

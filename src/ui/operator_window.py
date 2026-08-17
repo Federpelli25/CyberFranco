@@ -24,6 +24,7 @@ from src.audio.voice_recognition_worker import (
 from src.data.participant_repository import (
     ParticipantRepository,
 )
+from src.config.settings_loader import AppSettings
 from src.recognition.name_matcher import (
     NameMatcher,
 )
@@ -40,8 +41,10 @@ class OperatorWindow(QMainWindow):
     undo_last_requested = Signal()
     reset_participant_requested = Signal(dict)
 
-    def __init__(self):
+    def __init__(self, settings: AppSettings):
         super().__init__()
+
+        self.settings = settings
 
         self.setWindowTitle(
             "CyberFranco - Operator Console"
@@ -53,7 +56,9 @@ class OperatorWindow(QMainWindow):
         )
 
         self.repository = (
-            ParticipantRepository()
+            ParticipantRepository(
+                settings.resolve_participants_file()
+            )
         )
 
         self.participants = (
@@ -94,10 +99,12 @@ class OperatorWindow(QMainWindow):
         )
 
         self.speech_to_text = SpeechToText(
-            model_size="small",
-            device="cpu",
-            compute_type="int8",
-            language="it",
+            model_size=self.settings.whisper_model,
+            device=self.settings.whisper_device,
+            compute_type=(
+                self.settings.whisper_compute_type
+            ),
+            language=self.settings.language,
         )
 
         self.process_label.setText(
@@ -547,7 +554,13 @@ class OperatorWindow(QMainWindow):
                     self.speech_to_text,
                 hotwords=
                     self.hotwords,
-                duration_seconds=4.0,
+                duration_seconds=(
+                    self.settings
+                    .recording_duration_seconds
+                ),
+                microphone_device=(
+                    self.settings.microphone_device
+                ),
             )
         )
 
