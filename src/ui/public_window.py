@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     Qt,
+    Signal,
     QPropertyAnimation,
     QVariantAnimation,
     QSequentialAnimationGroup,
@@ -21,25 +22,40 @@ from PySide6.QtWidgets import (
 
 class PublicWindow(QMainWindow):
 
+    reveal_finished = Signal()
+
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("CyberFranco - Public Display")
-        self.resize(1280, 720)
+        self.setWindowTitle(
+            "CyberFranco - Public Display"
+        )
 
-        self.teams_root = Path("assets/teams")
+        self.resize(
+            1280,
+            720,
+        )
+
+        self.teams_root = Path(
+            "assets/teams"
+        )
 
         self.reveal_animation = None
         self.size_animation = None
 
         self._build_ui()
-        self._show_idle_state()
+        self.show_idle()
 
     def _build_ui(self):
         self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
 
-        self.layout = QVBoxLayout(self.central_widget)
+        self.setCentralWidget(
+            self.central_widget
+        )
+
+        self.layout = QVBoxLayout(
+            self.central_widget
+        )
 
         self.layout.setContentsMargins(
             40,
@@ -49,14 +65,25 @@ class PublicWindow(QMainWindow):
         )
 
         self.logo_label = QLabel()
-        self.logo_label.setAlignment(Qt.AlignCenter)
-        self.logo_label.setVisible(False)
+
+        self.logo_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.logo_label.setVisible(
+            False
+        )
 
         self.main_label = QLabel()
-        self.main_label.setAlignment(Qt.AlignCenter)
 
-        self.opacity_effect = QGraphicsOpacityEffect(
-            self.main_label
+        self.main_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.opacity_effect = (
+            QGraphicsOpacityEffect(
+                self.main_label
+            )
         )
 
         self.main_label.setGraphicsEffect(
@@ -64,11 +91,20 @@ class PublicWindow(QMainWindow):
         )
 
         self.layout.addStretch()
-        self.layout.addWidget(self.logo_label)
-        self.layout.addWidget(self.main_label)
+
+        self.layout.addWidget(
+            self.logo_label
+        )
+
+        self.layout.addWidget(
+            self.main_label
+        )
+
         self.layout.addStretch()
 
-    def _show_idle_state(self):
+    def show_idle(self):
+        self._stop_current_animation()
+
         self.central_widget.setStyleSheet(
             """
             QWidget {
@@ -78,7 +114,10 @@ class PublicWindow(QMainWindow):
         )
 
         self.logo_label.clear()
-        self.logo_label.setVisible(False)
+
+        self.logo_label.setVisible(
+            False
+        )
 
         self.main_label.setText(
             "Dimmi il tuo nome..."
@@ -94,30 +133,87 @@ class PublicWindow(QMainWindow):
             """
         )
 
-        self.opacity_effect.setOpacity(1.0)
+        self.opacity_effect.setOpacity(
+            1.0
+        )
+
+    def show_thinking(self):
+        self._stop_current_animation()
+
+        self.logo_label.clear()
+
+        self.logo_label.setVisible(
+            False
+        )
+
+        self.central_widget.setStyleSheet(
+            """
+            QWidget {
+                background:
+                    qradialgradient(
+                        cx: 0.5,
+                        cy: 0.5,
+                        radius: 0.8,
+                        fx: 0.5,
+                        fy: 0.5,
+                        stop: 0 #252525,
+                        stop: 0.45 #111111,
+                        stop: 1 #050505
+                    );
+            }
+            """
+        )
+
+        self.main_label.setText(
+            "Mmmh..."
+        )
+
+        self.main_label.setStyleSheet(
+            """
+            QLabel {
+                color: #dddddd;
+                font-size: 72px;
+                font-weight: 700;
+                letter-spacing: 4px;
+            }
+            """
+        )
+
+        self.opacity_effect.setOpacity(
+            1.0
+        )
 
     def show_team(
         self,
         participant_name: str,
         team: str,
     ):
+        self._stop_current_animation()
+
         team = team.strip()
 
         if not team:
             team = "SQUADRA"
 
-        team_slug = self._slugify_team_name(team)
+        team_slug = (
+            self._slugify_team_name(
+                team
+            )
+        )
 
         team_directory = (
-            self.teams_root / team_slug
+            self.teams_root
+            / team_slug
         )
 
         logo_path = (
-            team_directory / "logo.png"
+            team_directory
+            / "logo.png"
         )
 
         background_path = (
-            team_directory / "background.png"
+            team_directory
+            / "background.png"
         )
 
         self._apply_team_background(
@@ -136,7 +232,9 @@ class PublicWindow(QMainWindow):
             font_size=95
         )
 
-        self.opacity_effect.setOpacity(0.0)
+        self.opacity_effect.setOpacity(
+            0.0
+        )
 
         self._start_reveal_animation()
 
@@ -189,7 +287,11 @@ class PublicWindow(QMainWindow):
     ):
         if not logo_path.exists():
             self.logo_label.clear()
-            self.logo_label.setVisible(False)
+
+            self.logo_label.setVisible(
+                False
+            )
+
             return
 
         pixmap = QPixmap(
@@ -198,7 +300,11 @@ class PublicWindow(QMainWindow):
 
         if pixmap.isNull():
             self.logo_label.clear()
-            self.logo_label.setVisible(False)
+
+            self.logo_label.setVisible(
+                False
+            )
+
             return
 
         scaled_pixmap = pixmap.scaled(
@@ -212,7 +318,9 @@ class PublicWindow(QMainWindow):
             scaled_pixmap
         )
 
-        self.logo_label.setVisible(True)
+        self.logo_label.setVisible(
+            True
+        )
 
     def _start_reveal_animation(self):
         fade_in = QPropertyAnimation(
@@ -220,19 +328,37 @@ class PublicWindow(QMainWindow):
             b"opacity",
         )
 
-        fade_in.setDuration(400)
-        fade_in.setStartValue(0.0)
-        fade_in.setEndValue(1.0)
+        fade_in.setDuration(
+            400
+        )
+
+        fade_in.setStartValue(
+            0.0
+        )
+
+        fade_in.setEndValue(
+            1.0
+        )
 
         fade_in.setEasingCurve(
             QEasingCurve.OutCubic
         )
 
-        self.size_animation = QVariantAnimation()
+        self.size_animation = (
+            QVariantAnimation()
+        )
 
-        self.size_animation.setDuration(600)
-        self.size_animation.setStartValue(95)
-        self.size_animation.setEndValue(145)
+        self.size_animation.setDuration(
+            600
+        )
+
+        self.size_animation.setStartValue(
+            95
+        )
+
+        self.size_animation.setEndValue(
+            145
+        )
 
         self.size_animation.setEasingCurve(
             QEasingCurve.OutBack
@@ -245,7 +371,9 @@ class PublicWindow(QMainWindow):
                 )
         )
 
-        entrance = QParallelAnimationGroup()
+        entrance = (
+            QParallelAnimationGroup()
+        )
 
         entrance.addAnimation(
             fade_in
@@ -264,9 +392,17 @@ class PublicWindow(QMainWindow):
             b"opacity",
         )
 
-        fade_out.setDuration(500)
-        fade_out.setStartValue(1.0)
-        fade_out.setEndValue(0.0)
+        fade_out.setDuration(
+            500
+        )
+
+        fade_out.setStartValue(
+            1.0
+        )
+
+        fade_out.setEndValue(
+            0.0
+        )
 
         fade_out.setEasingCurve(
             QEasingCurve.InCubic
@@ -310,7 +446,18 @@ class PublicWindow(QMainWindow):
         )
 
     def _reset_after_reveal(self):
-        self._show_idle_state()
+        self.show_idle()
+
+        self.reveal_finished.emit()
+
+    def _stop_current_animation(self):
+        if self.reveal_animation is not None:
+            if (
+                self.reveal_animation.state()
+                !=
+                self.reveal_animation.State.Stopped
+            ):
+                self.reveal_animation.stop()
 
     @staticmethod
     def _slugify_team_name(
@@ -319,5 +466,8 @@ class PublicWindow(QMainWindow):
         return (
             team.strip()
             .lower()
-            .replace(" ", "_")
+            .replace(
+                " ",
+                "_",
+            )
         )
