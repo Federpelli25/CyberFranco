@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 
@@ -17,6 +18,7 @@ class ParticipantTracker:
 
         self._processed: set[str] = set()
         self._history: list[Participant] = []
+        self._processed_at: dict[str, str] = {}
 
     @staticmethod
     def _participant_key(
@@ -61,6 +63,9 @@ class ParticipantTracker:
         self._history.append(
             participant
         )
+        self._processed_at[key] = (
+            datetime.now().astimezone().isoformat(timespec="seconds")
+        )
 
         logger.info("Participant marked processed: %s", key)
 
@@ -88,6 +93,7 @@ class ParticipantTracker:
             return False
 
         self._processed.remove(key)
+        self._processed_at.pop(key, None)
 
         self._history = [
             item
@@ -117,6 +123,7 @@ class ParticipantTracker:
         self._processed.discard(
             key
         )
+        self._processed_at.pop(key, None)
 
         logger.info("Undo last assignment: %s", key)
 
@@ -141,6 +148,47 @@ class ParticipantTracker:
         logger.info("Participant tracking reset")
         self._processed.clear()
         self._history.clear()
+        self._processed_at.clear()
+
+    def load_processed(self, entries: Iterable[dict[str, Any]]) -> None:
+        """Ripristina ordine e timestamp usando solo partecipanti correnti."""
+        participants_by_key = {
+            self._participant_key(participant): participant
+            for participant in self.participants
+        }
+        restored_history = []
+        restored_keys = set()
+        restored_timestamps = {}
+
+        for entry in entries:
+            key = str(entry.get("key", ""))
+            participant = participants_by_key.get(key)
+            if participant is None:
+                raise ValueError(
+                    f"Partecipante della sessione non trovato: {key}."
+                )
+            if key in restored_keys:
+                raise ValueError(f"Partecipante duplicato nella sessione: {key}.")
+            restored_keys.add(key)
+            restored_history.append(participant)
+            restored_timestamps[key] = str(entry["processed_at"])
+
+        self._processed = restored_keys
+        self._history = restored_history
+        self._processed_at = restored_timestamps
+        logger.info("Participant tracking restored: %d", len(restored_history))
+
+    def export_state(self) -> list[dict[str, str]]:
+        result = []
+        for participant in self._history:
+            key = self._participant_key(participant)
+            result.append({
+                "key": key,
+                "name": str(participant["nome_completo"]),
+                "team": str(participant["squadra"]),
+                "processed_at": self._processed_at[key],
+            })
+        return result
 
     @property
     def total_count(self) -> int:

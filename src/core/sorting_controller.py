@@ -13,6 +13,7 @@ from src.core.state_manager import (
     StateManager,
 )
 from src.config.settings_loader import AppSettings
+from src.core.exceptions import SessionError
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,9 @@ class SortingController(QObject):
         state_manager: StateManager,
         participant_tracker: ParticipantTracker,
         settings: AppSettings,
+        session_repository=None,
+        session_context: dict | None = None,
+        session_blocked: bool = False,
     ):
         super().__init__()
 
@@ -47,6 +51,9 @@ class SortingController(QObject):
         )
 
         self.settings = settings
+        self.session_repository = session_repository
+        self.session_context = session_context
+        self.session_blocked = session_blocked
 
         self.current_participant = None
         self._flow_token = 0
@@ -77,6 +84,10 @@ class SortingController(QObject):
 
         self.operator_window.reset_participant_requested.connect(
             self.reset_participant
+        )
+
+        self.operator_window.new_event_requested.connect(
+            self.start_new_event
         )
 
         self.public_window.reveal_finished.connect(
@@ -131,6 +142,12 @@ class SortingController(QObject):
         self,
         participant: dict,
     ):
+        if self.session_blocked:
+            self.operator_window.show_warning(
+                "SESSIONE NON COMPATIBILE — AVVIA UN NUOVO EVENTO"
+            )
+            return
+
         allowed_states = {
             AppState.IDLE,
             AppState.LISTENING,
@@ -260,6 +277,7 @@ class SortingController(QObject):
         )
 
         self.operator_window.reset_for_next_participant()
+        self._persist_session("Participant assignment persisted")
 
     def undo_last_assignment(self):
         if not self.state_manager.is_idle():
@@ -277,11 +295,11 @@ class SortingController(QObject):
             return
 
         self._update_tracking_ui()
-
-        self.operator_window.show_tracking_message(
-            "ANNULLATA ULTIMA ASSEGNAZIONE: "
-            f"{participant['nome_completo']}"
-        )
+        if self._persist_session("Undo persisted"):
+            self.operator_window.show_tracking_message(
+                "ANNULLATA ULTIMA ASSEGNAZIONE: "
+                f"{participant['nome_completo']}"
+            )
 
     def reset_participant(
         self,
@@ -304,11 +322,40 @@ class SortingController(QObject):
             return
 
         self._update_tracking_ui()
+        if self._persist_session("Participant reset persisted"):
+            self.operator_window.show_tracking_message(
+                "RESET PARTECIPANTE: "
+                f"{participant['nome_completo']}"
+            )
 
-        self.operator_window.show_tracking_message(
-            "RESET PARTECIPANTE: "
-            f"{participant['nome_completo']}"
+    def start_new_event(self):
+        if not self.state_manager.is_idle():
+            return
+        self.participant_tracker.reset_all()
+        self.session_blocked = False
+        self._update_tracking_ui()
+        if self._persist_session("New event started"):
+            self.operator_window.show_tracking_message(
+                "NUOVO EVENTO AVVIATO — COMPLETATI: 0"
+            )
+        logger.info("New event started")
+
+    def _persist_session(self, event: str) -> bool:
+        if self.session_repository is None or self.session_context is None:
+            return True
+        self.session_context["processed"] = (
+            self.participant_tracker.export_state()
         )
+        try:
+            self.session_repository.save(self.session_context)
+        except SessionError:
+            logger.exception("Session persistence failed: %s", event)
+            self.operator_window.show_warning(
+                "SESSIONE NON SALVATA — RIPROVA PRIMA DI CHIUDERE"
+            )
+            return False
+        logger.info(event)
+        return True
 
     def _update_tracking_ui(self):
         self.operator_window.update_tracking_status(

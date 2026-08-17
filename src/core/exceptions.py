@@ -27,3 +27,11 @@ class SpeechRecognitionError(CyberFrancoError):
 
 class AssetError(CyberFrancoError):
     """Risorsa grafica non valida; normalmente degradabile."""
+
+
+class SessionError(CyberFrancoError):
+    """Errore di lettura o scrittura della sessione locale."""
+
+
+class SessionValidationError(SessionError):
+    """Sessione corrotta, incompleta o con versione non supportata."""

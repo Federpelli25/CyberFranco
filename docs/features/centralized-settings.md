@@ -81,3 +81,7 @@ console operatore.
 Le preferenze di monitor pubblico e fullscreen, come la selezione microfono,
 vengono salvate e applicate immediatamente dalla console operatore tramite lo
 stesso `SettingsLoader`.
+
+La persistenza evento usa inoltre `session_file` e
+`session_persistence_enabled`; il percorso relativo viene risolto dalla radice
+del progetto.

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
     QCheckBox,
+    QMessageBox,
 )
 
 from src.audio.audio_device_manager import (
@@ -63,6 +64,7 @@ class OperatorWindow(QMainWindow):
     undo_last_requested = Signal()
     reset_participant_requested = Signal(dict)
     public_display_changed = Signal(int, bool)
+    new_event_requested = Signal()
 
     def __init__(
         self,
@@ -439,6 +441,11 @@ class OperatorWindow(QMainWindow):
             self.reset_selected_button
         )
 
+        self.new_event_button = QPushButton("NUOVO EVENTO")
+        self.new_event_button.setStyleSheet(
+            "QPushButton { color: #b00020; font-weight: bold; padding: 10px; }"
+        )
+
         main_layout.addWidget(
             title
         )
@@ -496,6 +503,8 @@ class OperatorWindow(QMainWindow):
         main_layout.addLayout(
             tracking_button_layout
         )
+
+        main_layout.addWidget(self.new_event_button)
 
     def _connect_events(self):
         self.listen_button.clicked.connect(
@@ -564,6 +573,10 @@ class OperatorWindow(QMainWindow):
 
         self.reset_selected_button.clicked.connect(
             self._request_processed_reset
+        )
+
+        self.new_event_button.clicked.connect(
+            self._confirm_new_event
         )
 
     def _refresh_displays(
@@ -1084,6 +1097,30 @@ class OperatorWindow(QMainWindow):
             message
         )
 
+    def _confirm_new_event(self):
+        if self.processing or self.voice_processing:
+            return
+        message_box = QMessageBox(self)
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Nuovo evento")
+        message_box.setText(
+            "Vuoi iniziare un nuovo evento?\n\n"
+            "Tutti i partecipanti verranno marcati come non ancora "
+            "processati.\nIl file Excel non verrà modificato."
+        )
+        cancel_button = message_box.addButton(
+            "Annulla",
+            QMessageBox.RejectRole,
+        )
+        confirm_button = message_box.addButton(
+            "Nuovo evento",
+            QMessageBox.DestructiveRole,
+        )
+        message_box.setDefaultButton(cancel_button)
+        message_box.exec()
+        if message_box.clickedButton() is confirm_button:
+            self.new_event_requested.emit()
+
     def show_status(self, message: str):
         self.process_label.setText(message)
 
@@ -1573,6 +1610,7 @@ class OperatorWindow(QMainWindow):
     ):
         self.processing = processing
         self._update_display_controls()
+        self.new_event_button.setEnabled(not processing)
 
         self.search_input.setEnabled(
             not processing

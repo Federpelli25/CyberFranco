@@ -94,3 +94,7 @@ verificata sulla macchina dell'evento.
 Il recovery multi-monitor è ora implementato dalla feature `public-display`:
 monitor rimossi o non disponibili causano un fallback runtime sul primary senza
 interrompere il reveal o la console operatore.
+
+Le sessioni JSON corrotte vengono preservate con un nome timestampato; errori
+di scrittura degradano il sistema allo stato in memoria e producono un warning
+senza annullare reveal, undo o reset già completati.

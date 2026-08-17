@@ -50,6 +50,12 @@ class SettingsLoaderTests(unittest.TestCase):
         self.assertIsNone(settings.microphone_device)
         self.assertEqual(settings.public_display_monitor, 1)
         self.assertFalse(settings.public_display_fullscreen)
+        self.assertEqual(settings.session_file, "data/session.json")
+        self.assertTrue(settings.session_persistence_enabled)
+        self.assertEqual(
+            settings.resolve_session_file(),
+            self.project_root / "data" / "session.json",
+        )
         self.assertEqual(settings.logging_level, "INFO")
         self.assertEqual(
             settings.logging_file,
@@ -67,6 +73,8 @@ class SettingsLoaderTests(unittest.TestCase):
                 "microphone_device": 4,
                 "public_display_monitor": 2,
                 "public_display_fullscreen": True,
+                "session_file": "runtime/event.json",
+                "session_persistence_enabled": False,
             }
         )
 
@@ -81,6 +89,13 @@ class SettingsLoaderTests(unittest.TestCase):
         self.assertEqual(settings.microphone_device, 4)
         self.assertEqual(settings.public_display_monitor, 2)
         self.assertTrue(settings.public_display_fullscreen)
+        self.assertEqual(settings.session_file, "runtime/event.json")
+        self.assertFalse(settings.session_persistence_enabled)
+
+    def test_invalid_session_persistence_flag_is_rejected(self):
+        self.write_settings({"session_persistence_enabled": "yes"})
+        with self.assertRaisesRegex(SettingsError, "session_persistence_enabled"):
+            self.loader.load()
 
     def test_relative_paths_are_resolved_from_project_root(self):
         self.write_settings({})

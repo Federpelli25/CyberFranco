@@ -25,6 +25,8 @@ class AppSettings:
     microphone_device: int | None
     public_display_monitor: int
     public_display_fullscreen: bool
+    session_file: str
+    session_persistence_enabled: bool
     logging_level: str
     logging_file: str
     logging_max_bytes: int
@@ -72,6 +74,9 @@ class AppSettings:
             self.logging_file
         )
 
+    def resolve_session_file(self) -> Path:
+        return self.resolve_project_path(self.session_file)
+
 
 class SettingsLoader:
     DEFAULTS: dict[str, Any] = {
@@ -89,6 +94,8 @@ class SettingsLoader:
         "microphone_device": None,
         "public_display_monitor": 1,
         "public_display_fullscreen": False,
+        "session_file": "data/session.json",
+        "session_persistence_enabled": True,
         "logging": {
             "level": "INFO",
             "file": "logs/cyberfranco.log",
@@ -153,6 +160,10 @@ class SettingsLoader:
             ],
             public_display_fullscreen=values[
                 "public_display_fullscreen"
+            ],
+            session_file=values["session_file"],
+            session_persistence_enabled=values[
+                "session_persistence_enabled"
             ],
             logging_level=values["logging"]["level"],
             logging_file=values["logging"]["file"],
@@ -365,6 +376,13 @@ class SettingsLoader:
             raise SettingsError(
                 "'public_display_fullscreen' deve essere "
                 "true oppure false."
+            )
+
+        cls._require_non_empty_string(values, "session_file")
+
+        if not isinstance(values["session_persistence_enabled"], bool):
+            raise SettingsError(
+                "'session_persistence_enabled' deve essere true oppure false."
             )
 
         logging_settings = values["logging"]

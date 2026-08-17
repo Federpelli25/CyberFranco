@@ -56,6 +56,11 @@ Sono presenti test automatici per:
 
 ## Limiti attuali
 
-Lo stato non sopravvive al riavvio dell'applicazione. La persistenza della
-sessione sarà una feature separata. Gli omonimi sono distinti correttamente dal
-tracker soltanto quando l'Excel fornisce un `ID` univoco.
+Gli omonimi sono distinti correttamente dal tracker soltanto quando l'Excel
+fornisce un `ID` univoco.
+
+## Persistenza
+
+Con `session_persistence_enabled` attivo, stato e ordine cronologico vengono
+salvati dopo reveal, undo e reset e ripristinati al riavvio. Il formato e le
+strategie di recovery sono descritti in `docs/features/session-persistence.md`.

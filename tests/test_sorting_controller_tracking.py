@@ -26,6 +26,7 @@ class FakeOperatorWindow:
         self.listening_failed = FakeSignal()
         self.undo_last_requested = FakeSignal()
         self.reset_participant_requested = FakeSignal()
+        self.new_event_requested = FakeSignal()
 
         self.processing = False
         self.tracking_status = None
@@ -60,6 +61,9 @@ class FakeOperatorWindow:
         self.already_processed.append(participant)
 
     def show_error(self, message):
+        self.errors.append(message)
+
+    def show_warning(self, message):
         self.errors.append(message)
 
     def reset_for_next_participant(self):
@@ -140,6 +144,8 @@ class SortingControllerTrackingTests(unittest.TestCase):
             microphone_device=None,
             public_display_monitor=1,
             public_display_fullscreen=False,
+            session_file="data/session.json",
+            session_persistence_enabled=True,
             logging_level="INFO",
             logging_file="logs/cyberfranco.log",
             logging_max_bytes=5242880,

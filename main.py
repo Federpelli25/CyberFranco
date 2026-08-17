@@ -12,12 +12,17 @@ from src.config.settings_loader import (
 )
 from src.core.participant_tracker import ParticipantTracker
 from src.core.logging_config import configure_logging
-from src.core.exceptions import ParticipantDataError
+from src.core.exceptions import (
+    ParticipantDataError,
+    SessionError,
+    SessionValidationError,
+)
 from src.core.sorting_controller import SortingController
 from src.core.state_manager import StateManager
 from src.ui.operator_window import OperatorWindow
 from src.ui.public_window import PublicWindow
 from src.ui.display_manager import DisplayManager
+from src.data.session_repository import SessionRepository
 
 
 def install_exception_handler() -> None:
@@ -98,6 +103,86 @@ def main() -> int:
     participant_tracker = ParticipantTracker(
         operator_window.participants
     )
+    session_repository = None
+    session_context = None
+    session_blocked = False
+    session_message = None
+
+    if settings.session_persistence_enabled:
+        session_repository = SessionRepository(
+            settings.resolve_session_file()
+        )
+        fingerprint = SessionRepository.participants_fingerprint(
+            operator_window.participants
+        )
+        participants_file = str(operator_window.repository.file_path)
+        logger.info("Session file: %s", session_repository.file_path)
+        try:
+            session_context = session_repository.load()
+        except SessionValidationError:
+            logger.exception("Session corrupted")
+            try:
+                preserved = session_repository.quarantine_corrupted()
+                session_message = (
+                    "SESSIONE CORROTTA — AVVIATA SESSIONE VUOTA\n"
+                    f"Backup: {preserved.name if preserved else '-'}"
+                )
+            except SessionError:
+                logger.exception("Corrupted session quarantine failed")
+                session_message = "SESSIONE CORROTTA — BACKUP NON RIUSCITO"
+            session_context = None
+        except SessionError:
+            logger.exception("Session loading failed")
+            session_message = "SESSIONE NON LEGGIBILE — MODALITÀ TEMPORANEA"
+            session_repository = None
+
+        if session_repository is not None and session_context is None:
+            session_context = SessionRepository.create_empty(
+                participants_file,
+                fingerprint,
+            )
+            try:
+                session_repository.save(session_context)
+                logger.info("Session created")
+            except SessionError:
+                logger.exception("Initial session creation failed")
+                session_message = "SESSIONE NON SALVATA — CONTROLLA IL LOG"
+
+        if session_context is not None:
+            if session_context["participants_fingerprint"] != fingerprint:
+                logger.error("Session mismatch: participants fingerprint changed")
+                session_blocked = True
+                session_message = (
+                    "SESSIONE NON COMPATIBILE — IL FILE PARTECIPANTI È CAMBIATO. "
+                    "AVVIA UN NUOVO EVENTO."
+                )
+                session_context = SessionRepository.create_empty(
+                    participants_file,
+                    fingerprint,
+                )
+            elif session_context["processed"]:
+                try:
+                    participant_tracker.load_processed(
+                        session_context["processed"]
+                    )
+                    session_message = (
+                        "SESSIONE RIPRISTINATA — "
+                        f"{participant_tracker.processed_count} COMPLETATI"
+                    )
+                    logger.info(
+                        "Session restored; processed participants: %d",
+                        participant_tracker.processed_count,
+                    )
+                except ValueError:
+                    logger.exception("Session entries do not match participants")
+                    session_blocked = True
+                    session_message = (
+                        "SESSIONE NON COMPATIBILE — AVVIA UN NUOVO EVENTO"
+                    )
+                    session_context = SessionRepository.create_empty(
+                        participants_file,
+                        fingerprint,
+                    )
     logger.info(
         "Participants file: %s",
         operator_window.repository.file_path,
@@ -113,6 +198,9 @@ def main() -> int:
         state_manager=state_manager,
         participant_tracker=participant_tracker,
         settings=settings,
+        session_repository=session_repository,
+        session_context=session_context,
+        session_blocked=session_blocked,
     )
 
     operator_window.public_display_changed.connect(
@@ -129,6 +217,8 @@ def main() -> int:
 
     operator_window.show()
     public_window.show_configured()
+    if session_message:
+        operator_window.show_warning(session_message)
 
     return app.exec()
 

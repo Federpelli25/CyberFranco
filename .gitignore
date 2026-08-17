@@ -30,3 +30,6 @@ Thumbs.db
 
 # Real participant data
 data/partecipanti.xlsx
+
+# Local event sessions (contain participant names)
+data/session*.json

@@ -8,9 +8,11 @@
   "language": "it",
   "recording_duration_seconds": 4.0,
   "thinking_duration_ms": 1200,
-  "microphone_device": null,
+  "microphone_device": 1,
   "public_display_monitor": 1,
   "public_display_fullscreen": false,
+  "session_file": "data/session.json",
+  "session_persistence_enabled": true,
   "logging": {
     "level": "INFO",
     "file": "logs/cyberfranco.log",
