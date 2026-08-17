@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -20,6 +21,9 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
 )
 from src.config.settings_loader import AppSettings
+
+
+logger = logging.getLogger(__name__)
 
 
 class PublicWindow(QMainWindow):
@@ -309,6 +313,8 @@ class PublicWindow(QMainWindow):
         if not team:
             team = "SQUADRA"
 
+        logger.info("Public reveal: team=%s", team)
+
         team_slug = (
             self._slugify_team_name(
                 team
@@ -377,6 +383,8 @@ class PublicWindow(QMainWindow):
 
             return
 
+        logger.warning("Team background missing: %s", background_path)
+
         self.central_widget.setStyleSheet(
             """
             QWidget {
@@ -400,6 +408,7 @@ class PublicWindow(QMainWindow):
         logo_path: Path,
     ):
         if not logo_path.exists():
+            logger.warning("Team logo missing: %s", logo_path)
             self.logo_label.clear()
 
             self.logo_label.setVisible(
@@ -560,6 +569,7 @@ class PublicWindow(QMainWindow):
         )
 
     def _reset_after_reveal(self):
+        logger.info("Reveal completed")
         self.show_idle()
 
         self.reveal_finished.emit()

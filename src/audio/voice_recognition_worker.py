@@ -1,7 +1,12 @@
+import logging
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from src.audio.microphone import MicrophoneRecorder
 from src.audio.speech_to_text import SpeechToText
+
+
+logger = logging.getLogger(__name__)
 
 
 class VoiceRecognitionWorker(QObject):
@@ -47,6 +52,7 @@ class VoiceRecognitionWorker(QObject):
             )
 
         except Exception as exc:
+            logger.exception("Voice recognition worker failed")
             self.failed.emit(
                 str(exc)
             )

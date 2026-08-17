@@ -1,6 +1,10 @@
+import logging
 from pathlib import Path
 
 from openpyxl import load_workbook
+
+
+logger = logging.getLogger(__name__)
 
 
 class ParticipantRepository:
@@ -35,7 +39,10 @@ class ParticipantRepository:
         self.participants = []
 
     def load(self) -> list[dict]:
+        logger.info("Loading participants file: %s", self.file_path)
+
         if not self.file_path.exists():
+            logger.error("Participants file not found: %s", self.file_path)
             raise FileNotFoundError(
                 "File partecipanti non trovato: "
                 f"{self.file_path}"
@@ -59,6 +66,7 @@ class ParticipantRepository:
                     rows
                 )
             except StopIteration:
+                logger.error("Participants workbook is empty: %s", self.file_path)
                 raise ValueError(
                     "Il file Excel è vuoto."
                 )
@@ -82,6 +90,11 @@ class ParticipantRepository:
                     sorted(
                         missing_columns
                     )
+                )
+
+                logger.error(
+                    "Participants workbook missing columns: %s",
+                    missing_text,
                 )
 
                 raise ValueError(
@@ -159,6 +172,8 @@ class ParticipantRepository:
             self.participants = (
                 participants
             )
+
+            logger.info("Participants loaded: %d", len(participants))
 
             return participants
 

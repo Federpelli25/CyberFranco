@@ -17,7 +17,8 @@ Il file `config/settings.json` configura:
 - durata della fase di thinking;
 - dispositivo microfono;
 - monitor della finestra pubblica;
-- modalità fullscreen della finestra pubblica.
+- modalità fullscreen della finestra pubblica;
+- livello, file e rotazione del logging locale.
 
 Il loader applica valori predefiniti alle proprietà omesse, valida i valori e
 risolve i percorsi relativi rispetto alla radice del progetto. Il file Excel

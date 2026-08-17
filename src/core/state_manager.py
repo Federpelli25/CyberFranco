@@ -1,6 +1,10 @@
+import logging
 from enum import Enum
 
 from PySide6.QtCore import QObject, Signal
+
+
+logger = logging.getLogger(__name__)
 
 
 class AppState(str, Enum):
@@ -33,9 +37,7 @@ class StateManager(QObject):
 
         self._state = state
 
-        print(
-            f"STATE -> {state.value}"
-        )
+        logger.info("Application state changed: %s", state.value)
 
         self.state_changed.emit(
             state.value

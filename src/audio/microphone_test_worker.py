@@ -1,7 +1,12 @@
+import logging
+
 import numpy as np
 from PySide6.QtCore import QObject, Signal, Slot
 
 from src.audio.microphone import MicrophoneRecorder
+
+
+logger = logging.getLogger(__name__)
 
 
 class MicrophoneTestWorker(QObject):
@@ -23,19 +28,22 @@ class MicrophoneTestWorker(QObject):
 
     @Slot()
     def run(self):
+        logger.info("Microphone test started")
         try:
             audio = self.recorder.record(
                 self.duration_seconds
             )
             result = self.analyze_audio(audio)
 
-            print(
-                f"Test microfono: {result['status']}; "
-                f"peak={result['peak']:.6f}; "
-                f"rms={result['rms']:.6f}"
+            logger.info(
+                "Microphone test result: status=%s peak=%.6f rms=%.6f",
+                result["status"],
+                result["peak"],
+                result["rms"],
             )
             self.completed.emit(result)
         except Exception as exc:
+            logger.exception("Microphone test failed")
             self.failed.emit(str(exc))
 
     @staticmethod

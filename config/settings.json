@@ -10,5 +10,11 @@
   "thinking_duration_ms": 1200,
   "microphone_device": null,
   "public_display_monitor": 1,
-  "public_display_fullscreen": false
+  "public_display_fullscreen": false,
+  "logging": {
+    "level": "INFO",
+    "file": "logs/cyberfranco.log",
+    "max_bytes": 5242880,
+    "backup_count": 3
+  }
 }

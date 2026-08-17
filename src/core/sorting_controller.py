@@ -1,3 +1,5 @@
+import logging
+
 from PySide6.QtCore import (
     QObject,
     QTimer,
@@ -11,6 +13,9 @@ from src.core.state_manager import (
     StateManager,
 )
 from src.config.settings_loader import AppSettings
+
+
+logger = logging.getLogger(__name__)
 
 
 class SortingController(QObject):
@@ -84,10 +89,12 @@ class SortingController(QObject):
         self.state_manager.set_state(
             AppState.LISTENING
         )
+        logger.info("Listening started")
 
         self.public_window.show_listening()
 
     def _await_confirmation(self):
+        logger.warning("Match ambiguous; awaiting operator confirmation")
         self.state_manager.set_state(
             AppState.AWAITING_CONFIRMATION
         )
@@ -120,6 +127,10 @@ class SortingController(QObject):
         if self.participant_tracker.is_processed(
             participant
         ):
+            logger.warning(
+                "Participant already processed: %s",
+                participant["search_name"],
+            )
             self.state_manager.set_state(
                 AppState.IDLE
             )
@@ -135,6 +146,10 @@ class SortingController(QObject):
         self.current_participant = (
             participant
         )
+        logger.info(
+            "Participant confirmed: %s",
+            participant["nome_completo"],
+        )
 
         self.operator_window.set_processing(
             True
@@ -145,6 +160,7 @@ class SortingController(QObject):
         )
 
         self.public_window.show_thinking()
+        logger.info("Thinking started")
 
         QTimer.singleShot(
             self.settings.thinking_duration_ms,
@@ -162,6 +178,10 @@ class SortingController(QObject):
         self.state_manager.set_state(
             AppState.REVEAL
         )
+        logger.info(
+            "Reveal started: team=%s",
+            participant["squadra"],
+        )
 
         self.public_window.show_team(
             participant["nome_completo"],
@@ -178,6 +198,11 @@ class SortingController(QObject):
 
         self.participant_tracker.mark_processed(
             participant
+        )
+        logger.info(
+            "Assignment completed: %s; team=%s",
+            participant["nome_completo"],
+            participant["squadra"],
         )
 
         self.current_participant = None

@@ -1,6 +1,10 @@
+import logging
 from typing import Any
 
 import sounddevice as sd
+
+
+logger = logging.getLogger(__name__)
 
 
 class AudioDeviceError(RuntimeError):
@@ -14,6 +18,7 @@ class AudioDeviceManager:
             devices = sd.query_devices()
             host_apis = sd.query_hostapis()
         except Exception as exc:
+            logger.exception("Unable to enumerate audio devices")
             raise AudioDeviceError(
                 "Impossibile leggere i dispositivi audio: "
                 f"{exc}"
@@ -49,6 +54,7 @@ class AudioDeviceManager:
                 }
             )
 
+        logger.debug("Input devices found: %s", input_devices)
         return input_devices
 
     def get_default_input_device(self) -> dict | None:
@@ -57,6 +63,7 @@ class AudioDeviceManager:
                 sd.default.device
             )
         except Exception as exc:
+            logger.exception("Unable to determine default input device")
             raise AudioDeviceError(
                 "Impossibile determinare il microfono predefinito: "
                 f"{exc}"

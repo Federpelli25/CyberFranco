@@ -50,6 +50,13 @@ class SettingsLoaderTests(unittest.TestCase):
         self.assertIsNone(settings.microphone_device)
         self.assertEqual(settings.public_display_monitor, 1)
         self.assertFalse(settings.public_display_fullscreen)
+        self.assertEqual(settings.logging_level, "INFO")
+        self.assertEqual(
+            settings.logging_file,
+            "logs/cyberfranco.log",
+        )
+        self.assertEqual(settings.logging_max_bytes, 5242880)
+        self.assertEqual(settings.logging_backup_count, 3)
 
     def test_values_override_defaults(self):
         self.write_settings(
@@ -101,6 +108,72 @@ class SettingsLoaderTests(unittest.TestCase):
             settings.resolve_whisper_model_path(),
             self.project_root / "custom" / "whisper",
         )
+
+    def test_logging_settings_override_defaults(self):
+        self.write_settings(
+            {
+                "logging": {
+                    "level": "DEBUG",
+                    "file": "custom/app.log",
+                    "max_bytes": 1024,
+                    "backup_count": 1,
+                }
+            }
+        )
+
+        settings = self.loader.load()
+
+        self.assertEqual(settings.logging_level, "DEBUG")
+        self.assertEqual(settings.logging_max_bytes, 1024)
+        self.assertEqual(settings.logging_backup_count, 1)
+        self.assertEqual(
+            settings.resolve_log_file(),
+            self.project_root / "custom" / "app.log",
+        )
+
+    def test_partial_logging_settings_keep_defaults(self):
+        self.write_settings(
+            {"logging": {"level": "ERROR"}}
+        )
+
+        settings = self.loader.load()
+
+        self.assertEqual(settings.logging_level, "ERROR")
+        self.assertEqual(
+            settings.logging_file,
+            "logs/cyberfranco.log",
+        )
+
+    def test_invalid_logging_level_is_rejected(self):
+        self.write_settings(
+            {"logging": {"level": "VERBOSE"}}
+        )
+
+        with self.assertRaisesRegex(
+            SettingsError,
+            "logging.level",
+        ):
+            self.loader.load()
+
+    def test_logging_must_be_object(self):
+        self.write_settings({"logging": "INFO"})
+
+        with self.assertRaisesRegex(
+            SettingsError,
+            "oggetto JSON",
+        ):
+            self.loader.load()
+
+    def test_negative_logging_rotation_value_is_rejected(self):
+        self.write_settings(
+            {"logging": {"max_bytes": -1}}
+        )
+
+        with self.assertRaisesRegex(
+            SettingsError,
+            "logging.max_bytes",
+        ):
+            self.loader.load()
 
     def test_real_participants_file_has_priority(self):
         data_directory = self.project_root / "data"

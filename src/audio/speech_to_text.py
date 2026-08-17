@@ -1,8 +1,12 @@
+import logging
 import string
 from pathlib import Path
 
 import numpy as np
 from faster_whisper import WhisperModel
+
+
+logger = logging.getLogger(__name__)
 
 
 class SpeechModelError(RuntimeError):
@@ -30,11 +34,8 @@ class SpeechToText:
         self.compute_type = compute_type
         self.language = language
 
-        print(
-            "Modello Whisper locale:\n"
-            f"{self.model_path}"
-        )
-        print("Caricamento modello Whisper...")
+        logger.info("Whisper model path: %s", self.model_path)
+        logger.info("Whisper model loading")
 
         try:
             self.model = WhisperModel(
@@ -44,7 +45,7 @@ class SpeechToText:
                 local_files_only=True,
             )
         except Exception as exc:
-            print(f"Errore modello Whisper: {exc}")
+            logger.exception("Whisper model loading failed")
             raise SpeechModelError(
                 "MODELLO WHISPER NON CARICABILE\n\n"
                 "Percorso configurato:\n"
@@ -52,7 +53,7 @@ class SpeechToText:
                 f"Dettaglio: {exc}"
             ) from exc
 
-        print("Modello Whisper caricato.")
+        logger.info("Whisper model loaded")
 
     @classmethod
     def validate_model_path(
@@ -62,6 +63,7 @@ class SpeechToText:
         path = Path(model_path).expanduser().resolve()
 
         if not path.exists():
+            logger.error("Whisper model path not found: %s", path)
             raise SpeechModelError(
                 "MODELLO WHISPER NON TROVATO\n\n"
                 "Percorso configurato:\n"
@@ -70,6 +72,7 @@ class SpeechToText:
             )
 
         if not path.is_dir():
+            logger.error("Whisper model path is not a directory: %s", path)
             raise SpeechModelError(
                 "PERCORSO MODELLO WHISPER NON VALIDO\n\n"
                 f"'{path}' non è una directory."
@@ -83,6 +86,11 @@ class SpeechToText:
 
         if missing_files:
             missing_text = ", ".join(missing_files)
+            logger.error(
+                "Whisper model incomplete: path=%s missing=%s",
+                path,
+                missing_text,
+            )
             raise SpeechModelError(
                 "MODELLO WHISPER INCOMPLETO\n\n"
                 "Percorso configurato:\n"
@@ -99,11 +107,11 @@ class SpeechToText:
         hotwords: str | None = None,
     ) -> str:
         if audio is None:
-            print("Audio non disponibile.")
+            logger.warning("Transcription skipped: audio unavailable")
             return ""
 
         if len(audio) == 0:
-            print("Audio vuoto.")
+            logger.warning("Transcription skipped: empty audio")
             return ""
 
         audio = np.asarray(
@@ -118,14 +126,17 @@ class SpeechToText:
             np.sqrt(np.mean(np.square(audio)))
         )
 
-        print("Audio ricevuto da Whisper:")
-        print(f"- campioni: {len(audio)}")
-        print(f"- peak originale: {peak_before:.6f}")
-        print(f"- RMS originale: {rms_before:.6f}")
+        logger.info("Transcription started")
+        logger.debug(
+            "Audio metrics: samples=%d peak=%.6f rms=%.6f",
+            len(audio),
+            peak_before,
+            rms_before,
+        )
 
         audio = self._normalize_audio(audio)
         peak_after = float(np.max(np.abs(audio)))
-        print(f"- peak normalizzato: {peak_after:.6f}")
+        logger.debug("Normalized audio peak: %.6f", peak_after)
 
         initial_prompt = (
             "Verrà pronunciato solamente il nome e il cognome "
@@ -153,16 +164,25 @@ class SpeechToText:
 
         for segment in segments:
             text = segment.text.strip()
-            print(
-                f"Segmento Whisper: {segment.start:.2f}s - "
-                f"{segment.end:.2f}s -> '{text}'"
+            logger.debug(
+                "Whisper segment: %.2fs-%.2fs text=%r",
+                segment.start,
+                segment.end,
+                text,
             )
 
             if text:
                 text_parts.append(text)
 
         transcription = " ".join(text_parts).strip()
-        return self._clean_transcription(transcription)
+        cleaned_transcription = self._clean_transcription(
+            transcription
+        )
+        logger.info(
+            "Transcription completed: characters=%d",
+            len(cleaned_transcription),
+        )
+        return cleaned_transcription
 
     @staticmethod
     def _normalize_audio(

@@ -136,6 +136,10 @@ class SortingControllerTrackingTests(unittest.TestCase):
             microphone_device=None,
             public_display_monitor=1,
             public_display_fullscreen=False,
+            logging_level="INFO",
+            logging_file="logs/cyberfranco.log",
+            logging_max_bytes=5242880,
+            logging_backup_count=3,
         )
         self.controller = SortingController(
             operator_window=self.operator,

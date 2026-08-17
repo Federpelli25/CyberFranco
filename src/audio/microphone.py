@@ -1,7 +1,11 @@
+import logging
 from typing import Any
 
 import numpy as np
 import sounddevice as sd
+
+
+logger = logging.getLogger(__name__)
 
 
 class MicrophoneError(RuntimeError):
@@ -28,6 +32,7 @@ class MicrophoneRecorder:
                 kind="input",
             )
         except Exception as exc:
+            logger.exception("Unable to query selected microphone")
             raise MicrophoneError(
                 "Microfono non disponibile. "
                 "Seleziona un altro dispositivo. "
@@ -90,10 +95,10 @@ class MicrophoneRecorder:
         device_info = self.get_device_info()
         frames = int(duration_seconds * self.sample_rate)
 
-        print(
-            "Registrazione avviata "
-            f"({duration_seconds:.1f} secondi) con "
-            f"'{device_info['name']}'..."
+        logger.info(
+            "Recording started: device=%s duration=%.1fs",
+            device_info["name"],
+            duration_seconds,
         )
 
         try:
@@ -106,14 +111,14 @@ class MicrophoneRecorder:
                 device=self.device,
             )
         except Exception as exc:
-            print(f"Errore acquisizione microfono: {exc}")
+            logger.exception("Microphone recording failed")
             raise MicrophoneError(
                 "Microfono non disponibile o acquisizione fallita. "
                 "Seleziona un altro dispositivo e aggiorna la lista. "
                 f"Dettaglio: {exc}"
             ) from exc
 
-        print("Registrazione completata.")
+        logger.info("Recording completed: frames=%d", frames)
         audio = np.asarray(audio, dtype=np.float32)
 
         if self.channels == 1:

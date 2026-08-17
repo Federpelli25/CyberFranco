@@ -1,4 +1,9 @@
+import logging
+
 from rapidfuzz import fuzz, process
+
+
+logger = logging.getLogger(__name__)
 
 
 class NameMatcher:
@@ -78,11 +83,13 @@ class NameMatcher:
         ambiguity_margin: float = 7.0,
     ) -> dict:
 
+        logger.debug("Match query: %r", query)
         normalized_query = self._normalize(
             query
         )
 
         if not normalized_query:
+            logger.warning("Match status: not_found; empty query")
             return self._not_found_result(
                 query
             )
@@ -98,6 +105,10 @@ class NameMatcher:
                 "match_type": "exact",
             }
 
+            logger.info(
+                "Match status: match; candidate=%s; score=100.0",
+                exact_participant["search_name"],
+            )
             return {
                 "status": self.STATUS_MATCH,
                 "query": query,
@@ -111,6 +122,7 @@ class NameMatcher:
         )
 
         if not results:
+            logger.warning("Match status: not_found")
             return self._not_found_result(
                 query
             )
@@ -118,6 +130,12 @@ class NameMatcher:
         best = results[0]
 
         if best["score"] < automatic_threshold:
+            logger.warning(
+                "Match status: ambiguous; best=%s; score=%.2f",
+                best["participant"]["search_name"],
+                best["score"],
+            )
+            logger.debug("Ambiguous candidates: %s", results)
             return {
                 "status": self.STATUS_AMBIGUOUS,
                 "query": query,
@@ -134,6 +152,12 @@ class NameMatcher:
             )
 
             if difference < ambiguity_margin:
+                logger.warning(
+                    "Match status: ambiguous; best=%s; score=%.2f",
+                    best["participant"]["search_name"],
+                    best["score"],
+                )
+                logger.debug("Ambiguous candidates: %s", results)
                 return {
                     "status": self.STATUS_AMBIGUOUS,
                     "query": query,
@@ -141,6 +165,11 @@ class NameMatcher:
                     "results": results,
                 }
 
+        logger.info(
+            "Match status: match; candidate=%s; score=%.2f",
+            best["participant"]["search_name"],
+            best["score"],
+        )
         return {
             "status": self.STATUS_MATCH,
             "query": query,

@@ -1,8 +1,10 @@
+import logging
 from collections.abc import Iterable
 from typing import Any
 
 
 Participant = dict[str, Any]
+logger = logging.getLogger(__name__)
 
 
 class ParticipantTracker:
@@ -49,6 +51,7 @@ class ParticipantTracker:
         )
 
         if key in self._processed:
+            logger.warning("Participant already processed: %s", key)
             return False
 
         self._processed.add(
@@ -58,6 +61,8 @@ class ParticipantTracker:
         self._history.append(
             participant
         )
+
+        logger.info("Participant marked processed: %s", key)
 
         return True
 
@@ -91,6 +96,8 @@ class ParticipantTracker:
             != key
         ]
 
+        logger.info("Participant reset: %s", key)
+
         return True
 
     def undo_last(
@@ -111,6 +118,8 @@ class ParticipantTracker:
             key
         )
 
+        logger.info("Undo last assignment: %s", key)
+
         return participant
 
     def get_processed_participants(
@@ -129,6 +138,7 @@ class ParticipantTracker:
         return self._history[-1]
 
     def reset_all(self) -> None:
+        logger.info("Participant tracking reset")
         self._processed.clear()
         self._history.clear()
 

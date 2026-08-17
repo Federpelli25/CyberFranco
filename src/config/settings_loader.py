@@ -23,6 +23,10 @@ class AppSettings:
     microphone_device: int | None
     public_display_monitor: int
     public_display_fullscreen: bool
+    logging_level: str
+    logging_file: str
+    logging_max_bytes: int
+    logging_backup_count: int
 
     def resolve_project_path(
         self,
@@ -61,6 +65,11 @@ class AppSettings:
             self.whisper_model_path
         )
 
+    def resolve_log_file(self) -> Path:
+        return self.resolve_project_path(
+            self.logging_file
+        )
+
 
 class SettingsLoader:
     DEFAULTS: dict[str, Any] = {
@@ -78,6 +87,12 @@ class SettingsLoader:
         "microphone_device": None,
         "public_display_monitor": 1,
         "public_display_fullscreen": False,
+        "logging": {
+            "level": "INFO",
+            "file": "logs/cyberfranco.log",
+            "max_bytes": 5 * 1024 * 1024,
+            "backup_count": 3,
+        },
     }
 
     def __init__(
@@ -99,6 +114,15 @@ class SettingsLoader:
             **self.DEFAULTS,
             **raw_settings,
         }
+        raw_logging = raw_settings.get("logging", {})
+
+        if isinstance(raw_logging, dict):
+            values["logging"] = {
+                **self.DEFAULTS["logging"],
+                **raw_logging,
+            }
+        else:
+            values["logging"] = raw_logging
 
         self._validate(values)
 
@@ -128,6 +152,12 @@ class SettingsLoader:
             public_display_fullscreen=values[
                 "public_display_fullscreen"
             ],
+            logging_level=values["logging"]["level"],
+            logging_file=values["logging"]["file"],
+            logging_max_bytes=values["logging"]["max_bytes"],
+            logging_backup_count=(
+                values["logging"]["backup_count"]
+            ),
         )
 
     def save_microphone_device(
@@ -302,6 +332,49 @@ class SettingsLoader:
                 "'public_display_fullscreen' deve essere "
                 "true oppure false."
             )
+
+        logging_settings = values["logging"]
+
+        if not isinstance(logging_settings, dict):
+            raise SettingsError(
+                "'logging' deve essere un oggetto JSON."
+            )
+
+        cls._require_non_empty_string(
+            logging_settings,
+            "level",
+        )
+        cls._require_non_empty_string(
+            logging_settings,
+            "file",
+        )
+
+        level = logging_settings["level"].upper()
+
+        if level not in {
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL",
+        }:
+            raise SettingsError(
+                "'logging.level' deve essere DEBUG, INFO, "
+                "WARNING, ERROR oppure CRITICAL."
+            )
+
+        for key in ("max_bytes", "backup_count"):
+            value = logging_settings[key]
+
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+            ):
+                raise SettingsError(
+                    f"'logging.{key}' deve essere un intero "
+                    "maggiore o uguale a zero."
+                )
 
     @staticmethod
     def _require_non_empty_string(

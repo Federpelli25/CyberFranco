@@ -1,3 +1,5 @@
+import logging
+
 from PySide6.QtCore import (
     Qt,
     Signal,
@@ -42,6 +44,9 @@ from src.config.settings_loader import (
 from src.recognition.name_matcher import (
     NameMatcher,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class OperatorWindow(QMainWindow):
@@ -140,6 +145,7 @@ class OperatorWindow(QMainWindow):
                 language=self.settings.language,
             )
         except SpeechModelError as exc:
+            logger.warning("Whisper model unavailable: %s", exc)
             self.speech_to_text = None
             self.speech_ready = False
             self.process_label.setText(
@@ -527,6 +533,7 @@ class OperatorWindow(QMainWindow):
                 .get_default_input_device()
             )
         except AudioDeviceError as exc:
+            logger.exception("Audio device refresh failed")
             self.input_devices = []
             self.microphone_combo.clear()
             self.active_microphone_label.setText(
@@ -654,12 +661,13 @@ class OperatorWindow(QMainWindow):
                 device_id
             )
         except SettingsError as exc:
+            logger.exception("Microphone selection could not be saved")
             self.microphone_test_label.setText(
                 f"Scelta attiva ma non salvata: {exc}"
             )
             return
 
-        print(f"Microfono selezionato: Device {device_id}")
+        logger.info("Selected microphone: device_id=%s", device_id)
 
     def _update_active_microphone_label(self):
         if self.current_microphone_device is None:
@@ -899,6 +907,7 @@ class OperatorWindow(QMainWindow):
             return
 
         if not self.input_devices:
+            logger.warning("Listening unavailable: no microphone")
             self.process_label.setText(
                 "NESSUN MICROFONO DISPONIBILE"
             )
@@ -914,9 +923,14 @@ class OperatorWindow(QMainWindow):
                     )
                 )
             except AudioDeviceError:
+                logger.exception("Selected microphone availability check failed")
                 device_available = False
 
             if not device_available:
+                logger.warning(
+                    "Configured microphone unavailable: device_id=%s",
+                    self.current_microphone_device,
+                )
                 self.process_label.setText(
                     "Microfono non disponibile. "
                     "Seleziona un altro dispositivo."
@@ -929,6 +943,10 @@ class OperatorWindow(QMainWindow):
                 return
 
         self.voice_processing = True
+        logger.info(
+            "Voice recognition started: device_id=%s",
+            self.current_microphone_device,
+        )
         self._update_audio_controls()
 
         self.transcription_label.setText(
@@ -1020,6 +1038,7 @@ class OperatorWindow(QMainWindow):
         self.voice_processing = False
 
         if not transcription:
+            logger.warning("Voice recognition completed without text")
             self.transcription_label.setText(
                 "Voce riconosciuta: nessun testo"
             )
@@ -1049,6 +1068,10 @@ class OperatorWindow(QMainWindow):
             participant = best_match[
                 "participant"
             ]
+            logger.info(
+                "Voice participant confirmed: %s",
+                participant["nome_completo"],
+            )
 
             self.selected_participant = (
                 participant
@@ -1072,6 +1095,7 @@ class OperatorWindow(QMainWindow):
             self._show_voice_candidates(
                 result["results"]
             )
+            logger.warning("Voice match ambiguous")
 
             self.process_label.setText(
                 "STATO: SCELTA PARTECIPANTE"
@@ -1101,9 +1125,9 @@ class OperatorWindow(QMainWindow):
     ):
         self.voice_processing = False
 
-        print(
-            f"Errore riconoscimento vocale: "
-            f"{error_message}"
+        logger.error(
+            "Voice recognition failed: %s",
+            error_message,
         )
 
         self.transcription_label.setText(
