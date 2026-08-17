@@ -96,3 +96,7 @@ Nome e ordine restituiti da Qt dipendono dal sistema operativo e dai driver. Il
 fallback è affidabile, ma la persistenza assoluta dell'identità fisica di uno
 schermo non è garantita. Il comportamento reale di fullscreen e taskbar deve
 essere verificato sulla macchina Windows usata durante l'evento.
+
+Dal redesign amministratore selezione monitor, fullscreen e riposizionamento
+sono raccolti nella pagina IMPOSTAZIONI; l'header e le altre pagine non alterano
+la finestra pubblica.

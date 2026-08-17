@@ -93,3 +93,6 @@ fallimento di scrittura.
 Non sono previsti migrazioni oltre la versione 1, sincronizzazione tra PC,
 backup remoto o recovery di modifiche rimaste solo in memoria dopo un errore di
 scrittura. La persistenza resta locale al computer dell'evento.
+
+Le informazioni di sessione e il comando NUOVO EVENTO sono ora isolati nella
+pagina SESSIONE della console amministratore.

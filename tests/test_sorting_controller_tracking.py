@@ -35,6 +35,8 @@ class FakeOperatorWindow:
         self.already_processed = []
         self.errors = []
         self.reset_count = 0
+        self.global_state = None
+        self.session_info = None
 
     def set_processing(self, processing):
         self.processing = processing
@@ -65,6 +67,12 @@ class FakeOperatorWindow:
 
     def show_warning(self, message):
         self.errors.append(message)
+
+    def update_global_state(self, state):
+        self.global_state = getattr(state, "value", state)
+
+    def update_session_info(self, session, blocked=False):
+        self.session_info = (session, blocked)
 
     def reset_for_next_participant(self):
         self.reset_count += 1

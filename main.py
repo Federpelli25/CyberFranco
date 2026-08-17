@@ -217,6 +217,10 @@ def main() -> int:
 
     operator_window.show()
     public_window.show_configured()
+    operator_window.update_session_info(
+        session_context,
+        blocked=session_blocked,
+    )
     if session_message:
         operator_window.show_warning(session_message)
 

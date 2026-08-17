@@ -20,6 +20,9 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QCheckBox,
     QMessageBox,
+    QStackedWidget,
+    QButtonGroup,
+    QScrollArea,
 )
 
 from src.audio.audio_device_manager import (
@@ -48,6 +51,7 @@ from src.recognition.name_matcher import (
     NameMatcher,
 )
 from src.ui.display_manager import DisplayManager
+from src.ui.operator_theme import apply_operator_theme
 
 
 logger = logging.getLogger(__name__)
@@ -116,6 +120,7 @@ class OperatorWindow(QMainWindow):
 
         self.selected_participant = None
         self.selected_processed_participant = None
+        self._processed_participant_keys = set()
 
         self.processing = False
         self.voice_processing = False
@@ -348,6 +353,7 @@ class OperatorWindow(QMainWindow):
         )
 
         self.results_list = QListWidget()
+        self.results_list.setMinimumHeight(220)
 
         self.selection_label = QLabel(
             "Nessun partecipante selezionato"
@@ -398,6 +404,7 @@ class OperatorWindow(QMainWindow):
         )
 
         self.processed_list = QListWidget()
+        self.processed_list.setMinimumHeight(180)
 
         self.processed_list.setStyleSheet(
             """
@@ -505,6 +512,193 @@ class OperatorWindow(QMainWindow):
         )
 
         main_layout.addWidget(self.new_event_button)
+
+        self._apply_multipage_layout(
+            microphone_group,
+            display_group,
+        )
+
+    def _apply_multipage_layout(self, microphone_group, display_group):
+        for widget in (
+            self.listen_button,
+            self.search_input,
+            self.processed_list,
+            self.new_event_button,
+        ):
+            widget.setStyleSheet("")
+        self.listen_button.setObjectName("primaryActionButton")
+        self.new_event_button.setObjectName("dangerActionButton")
+        self.process_label.setObjectName("operatorMessage")
+        self.resize(1280, 800)
+        self.setMinimumSize(960, 640)
+
+        central_widget = QWidget()
+        root_layout = QVBoxLayout(central_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        header = QWidget()
+        header.setObjectName("adminHeader")
+        header_layout = QVBoxLayout(header)
+        header_top = QHBoxLayout()
+        header_title = QLabel("CYBERFRANCO")
+        header_title.setObjectName("headerTitle")
+        self.header_state_label = QLabel("PRONTO")
+        self.header_state_label.setObjectName("stateReady")
+        self.header_progress_label = QLabel("0 / 0 completati")
+        header_top.addWidget(header_title)
+        header_top.addStretch()
+        header_top.addWidget(self.header_progress_label)
+        header_top.addWidget(self.header_state_label)
+
+        navigation_layout = QHBoxLayout()
+        self.navigation_group = QButtonGroup(self)
+        self.navigation_group.setExclusive(True)
+        self.navigation_buttons = {}
+        for page_name, label in (
+            ("event", "EVENTO"),
+            ("participants", "PARTECIPANTI"),
+            ("settings", "IMPOSTAZIONI"),
+            ("session", "SESSIONE"),
+        ):
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.clicked.connect(
+                lambda _checked=False, name=page_name: self.show_page(name)
+            )
+            self.navigation_group.addButton(button)
+            self.navigation_buttons[page_name] = button
+            navigation_layout.addWidget(button)
+
+        header_layout.addLayout(header_top)
+        header_layout.addLayout(navigation_layout)
+        root_layout.addWidget(header)
+
+        self.page_stack = QStackedWidget()
+        root_layout.addWidget(self.page_stack, 1)
+
+        self.event_page, event_layout = self._create_scroll_page("EVENTO")
+        self.event_progress_label = QLabel("Completati: 0 / 0   •   Rimanenti: 0")
+        self.event_progress_label.setObjectName("progressLabel")
+        self.selected_team_label = QLabel("Squadra: -")
+        self.selected_team_label.setAlignment(Qt.AlignCenter)
+        event_buttons = QHBoxLayout()
+        event_buttons.addWidget(self.clear_button)
+        event_buttons.addWidget(self.confirm_button)
+        event_layout.addWidget(self.event_progress_label)
+        event_layout.addWidget(self.process_label)
+        event_layout.addWidget(self.listen_button)
+        event_layout.addWidget(QLabel("Trascrizione"))
+        event_layout.addWidget(self.transcription_label)
+        event_layout.addWidget(QLabel("Ricerca manuale"))
+        event_layout.addWidget(self.search_input)
+        event_layout.addWidget(QLabel("Suggerimenti"))
+        event_layout.addWidget(self.results_list, 1)
+        event_layout.addWidget(self.selection_label)
+        event_layout.addWidget(self.selected_team_label)
+        event_layout.addLayout(event_buttons)
+
+        self.participants_page, participants_layout = self._create_scroll_page(
+            "PARTECIPANTI"
+        )
+        self.participants_filter_input = QLineEdit()
+        self.participants_filter_input.setPlaceholderText("Cerca partecipante...")
+        self.all_participants_list = QListWidget()
+        self.all_participants_list.setMinimumHeight(220)
+        self.participants_message_label = QLabel("")
+        tracking_buttons = QHBoxLayout()
+        tracking_buttons.addWidget(self.undo_button)
+        tracking_buttons.addWidget(self.reset_selected_button)
+        participants_layout.addWidget(self.status_label)
+        participants_layout.addWidget(QLabel("Elenco completo"))
+        participants_layout.addWidget(self.participants_filter_input)
+        participants_layout.addWidget(self.all_participants_list, 1)
+        participants_layout.addWidget(QLabel("Storico completati"))
+        participants_layout.addWidget(self.processed_list, 1)
+        participants_layout.addLayout(tracking_buttons)
+        participants_layout.addWidget(self.participants_message_label)
+
+        self.settings_page, settings_layout = self._create_scroll_page(
+            "IMPOSTAZIONI"
+        )
+        settings_layout.addWidget(microphone_group)
+        settings_layout.addWidget(display_group)
+        settings_layout.addStretch()
+
+        self.session_page, session_layout = self._create_scroll_page(
+            "SESSIONE EVENTO"
+        )
+        self.session_status_label = QLabel(
+            "Persistenza: "
+            + ("ATTIVA" if self.settings.session_persistence_enabled else "IN MEMORIA")
+        )
+        self.session_file_label = QLabel(
+            f"File sessione: {self.settings.session_file}"
+        )
+        self.session_details_label = QLabel("Sessione non ancora inizializzata")
+        self.session_details_label.setWordWrap(True)
+        self.session_action_label = QLabel("")
+        session_layout.addWidget(self.session_status_label)
+        session_layout.addWidget(self.session_file_label)
+        session_layout.addWidget(self.file_label)
+        session_layout.addWidget(self.session_details_label)
+        session_layout.addWidget(self.session_action_label)
+        session_layout.addStretch()
+        session_layout.addWidget(self.new_event_button)
+
+        self.pages = {
+            "event": self.event_page,
+            "participants": self.participants_page,
+            "settings": self.settings_page,
+            "session": self.session_page,
+        }
+        for page in self.pages.values():
+            self.page_stack.addWidget(page)
+
+        self.event_escape_shortcut = QShortcut(
+            QKeySequence(Qt.Key_Escape), self.event_page
+        )
+        self.event_escape_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.event_escape_shortcut.activated.connect(self._clear_search)
+        self.candidate_enter_shortcut = QShortcut(
+            QKeySequence(Qt.Key_Return), self.results_list
+        )
+        self.candidate_enter_shortcut.setContext(Qt.WidgetShortcut)
+        self.candidate_enter_shortcut.activated.connect(
+            self._confirm_or_select_first
+        )
+
+        self.participants_filter_input.textChanged.connect(
+            self._refresh_all_participants
+        )
+        self.setCentralWidget(central_widget)
+        apply_operator_theme(self)
+        self.show_page("event")
+        self._refresh_all_participants()
+
+    def _create_scroll_page(self, title_text: str):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(28, 24, 28, 28)
+        layout.setSpacing(14)
+        title = QLabel(title_text)
+        title.setObjectName("pageTitle")
+        layout.addWidget(title)
+        scroll.setWidget(content)
+        return scroll, layout
+
+    def show_page(self, page_name: str):
+        page = self.pages.get(page_name)
+        if page is None:
+            return
+        self.page_stack.setCurrentWidget(page)
+        self.navigation_buttons[page_name].setChecked(True)
+        self.current_page_name = page_name
+        logger.debug("Operator page changed: %s", page_name)
+        if page_name == "event" and not self.processing:
+            self.search_input.setFocus()
 
     def _connect_events(self):
         self.listen_button.clicked.connect(
@@ -1000,9 +1194,15 @@ class OperatorWindow(QMainWindow):
             f"Completati: {processed}   |   "
             f"Rimanenti: {remaining}"
         )
+        self.event_progress_label.setText(
+            f"Completati: {processed} / {total}   •   Rimanenti: {remaining}"
+        )
+        self.header_progress_label.setText(
+            f"{processed} / {total} completati"
+        )
 
         self.undo_button.setEnabled(
-            processed > 0
+            processed > 0 and not self.processing
         )
 
     def update_processed_list(
@@ -1016,6 +1216,10 @@ class OperatorWindow(QMainWindow):
         self.reset_selected_button.setEnabled(
             False
         )
+        self._processed_participant_keys = {
+            str(participant.get("search_name", "")).casefold()
+            for participant in participants
+        }
 
         for participant in reversed(
             participants
@@ -1032,6 +1236,31 @@ class OperatorWindow(QMainWindow):
 
             self.processed_list.addItem(
                 item
+            )
+        self._refresh_all_participants()
+
+    def _refresh_all_participants(self, *_):
+        if not hasattr(self, "all_participants_list"):
+            return
+        query = self.participants_filter_input.text().strip().casefold()
+        self.all_participants_list.clear()
+        for participant in self.participants:
+            searchable = " ".join((
+                str(participant.get("nome", "")),
+                str(participant.get("cognome", "")),
+                str(participant.get("nome_completo", "")),
+                str(participant.get("squadra", "")),
+            )).casefold()
+            if query and query not in searchable:
+                continue
+            completed = (
+                str(participant.get("search_name", "")).casefold()
+                in self._processed_participant_keys
+            )
+            status = "COMPLETATO" if completed else "DA PROCESSARE"
+            self.all_participants_list.addItem(
+                f"{participant['nome_completo']} — "
+                f"{participant['squadra']} — {status}"
             )
 
     def _select_processed_participant(
@@ -1074,6 +1303,7 @@ class OperatorWindow(QMainWindow):
         self,
         participant: dict,
     ):
+        self.set_processing(False)
         self.process_label.setText(
             "STATO: GIÀ ASSEGNATO"
         )
@@ -1082,10 +1312,11 @@ class OperatorWindow(QMainWindow):
             f"{participant['nome_completo']} "
             "è già stato processato"
         )
-
-        self.set_processing(
-            False
+        self.selected_team_label.setText(
+            f"Squadra: {participant['squadra']}"
         )
+
+        self.update_global_state("PROCESSED")
 
         self.search_input.setFocus()
 
@@ -1096,6 +1327,8 @@ class OperatorWindow(QMainWindow):
         self.process_label.setText(
             message
         )
+        self.participants_message_label.setText(message)
+        self.session_action_label.setText(message)
 
     def _confirm_new_event(self):
         if self.processing or self.voice_processing:
@@ -1130,7 +1363,45 @@ class OperatorWindow(QMainWindow):
 
     def show_error(self, message: str):
         logger.error("Operator error: %s", message)
+        self.update_global_state("ERROR")
         self.show_status(message)
+
+    def update_global_state(self, state):
+        state_value = getattr(state, "value", state)
+        states = {
+            "IDLE": ("PRONTO", "stateReady"),
+            "LISTENING": ("ASCOLTO", "stateListening"),
+            "AWAITING_CONFIRMATION": ("DA CONFERMARE", "stateConfirm"),
+            "THINKING": ("ELABORAZIONE", "stateProcessing"),
+            "REVEAL": ("REVEAL", "stateReveal"),
+            "ERROR": ("ERRORE", "stateError"),
+            "PROCESSED": ("GIÀ PROCESSATO", "stateProcessed"),
+        }
+        text, object_name = states.get(
+            str(state_value),
+            (str(state_value), "stateReady"),
+        )
+        self.header_state_label.setText(text)
+        self.header_state_label.setObjectName(object_name)
+        self.header_state_label.style().unpolish(self.header_state_label)
+        self.header_state_label.style().polish(self.header_state_label)
+
+    def update_session_info(self, session: dict | None, blocked: bool = False):
+        if not self.settings.session_persistence_enabled:
+            self.session_status_label.setText("Persistenza: IN MEMORIA")
+            self.session_details_label.setText("Nessun file sessione utilizzato.")
+            return
+        status = "NON COMPATIBILE" if blocked else "ATTIVA"
+        self.session_status_label.setText(f"Persistenza: {status}")
+        if session is None:
+            self.session_details_label.setText("Sessione non disponibile.")
+            return
+        self.session_details_label.setText(
+            f"Creata: {session.get('created_at', '-')}\n"
+            f"Ultimo aggiornamento: {session.get('updated_at', '-')}\n"
+            f"Completati salvati: {len(session.get('processed', []))}\n"
+            f"Compatibilità: {'DA RISOLVERE' if blocked else 'VALIDA'}"
+        )
 
     def _start_voice_recognition(self):
         if (
@@ -1333,6 +1604,9 @@ class OperatorWindow(QMainWindow):
                 f"{participant['nome_completo']} "
                 f"({best_match['score']}%)"
             )
+            self.selected_team_label.setText(
+                f"Squadra: {participant['squadra']}"
+            )
 
             self.participant_confirmed.emit(
                 participant
@@ -1350,12 +1624,13 @@ class OperatorWindow(QMainWindow):
             logger.warning("Voice match ambiguous")
 
             self.process_label.setText(
-                "STATO: SCELTA PARTECIPANTE"
+                "RICONOSCIMENTO DA CONFERMARE"
             )
 
             self.listening_ambiguous.emit()
 
             self._enable_manual_controls()
+            self.results_list.setFocus()
 
             return
 
@@ -1368,6 +1643,7 @@ class OperatorWindow(QMainWindow):
         )
 
         self.listening_failed.emit()
+        self.update_global_state("ERROR")
 
         self._enable_manual_controls()
 
@@ -1392,6 +1668,7 @@ class OperatorWindow(QMainWindow):
         )
 
         self.listening_failed.emit()
+        self.update_global_state("ERROR")
 
         self._enable_manual_controls()
 
@@ -1463,6 +1740,7 @@ class OperatorWindow(QMainWindow):
             self.results_list.setCurrentRow(
                 0
             )
+            self.results_list.setFocus()
 
     def _update_results(
         self,
@@ -1488,6 +1766,7 @@ class OperatorWindow(QMainWindow):
             self.selection_label.setText(
                 "Nessun partecipante selezionato"
             )
+            self.selected_team_label.setText("Squadra: -")
             return
 
         results = self.matcher.search(
@@ -1548,6 +1827,9 @@ class OperatorWindow(QMainWindow):
 
         self.selection_label.setText(
             participant["nome_completo"]
+        )
+        self.selected_team_label.setText(
+            f"Squadra: {participant['squadra']}"
         )
 
         self.confirm_button.setEnabled(
@@ -1611,6 +1893,12 @@ class OperatorWindow(QMainWindow):
         self.processing = processing
         self._update_display_controls()
         self.new_event_button.setEnabled(not processing)
+        self.undo_button.setEnabled(
+            not processing and bool(self._processed_participant_keys)
+        )
+        self.reset_selected_button.setEnabled(
+            not processing and self.selected_processed_participant is not None
+        )
 
         self.search_input.setEnabled(
             not processing
@@ -1656,6 +1944,7 @@ class OperatorWindow(QMainWindow):
         self.selection_label.setText(
             "Nessun partecipante selezionato"
         )
+        self.selected_team_label.setText("Squadra: -")
 
         self.process_label.setText(
             "STATO: PRONTO"
@@ -1700,6 +1989,7 @@ class OperatorWindow(QMainWindow):
         self.selection_label.setText(
             "Nessun partecipante selezionato"
         )
+        self.selected_team_label.setText("Squadra: -")
 
         self.confirm_button.setEnabled(
             False

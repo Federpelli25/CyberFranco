@@ -113,3 +113,6 @@ La gestione errori centralizzata mantiene attiva la ricerca manuale se un device
 non è più disponibile, se PortAudio fallisce o se un worker termina in errore.
 La console torna utilizzabile e consente di aggiornare o cambiare microfono. I
 dettagli sono descritti in `docs/features/error-handling.md`.
+
+Dal redesign amministratore i controlli microfono sono disponibili nella pagina
+IMPOSTAZIONI della console, senza modifiche alla logica audio.

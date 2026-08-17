@@ -94,6 +94,11 @@ class SortingController(QObject):
             self._finish_sorting
         )
 
+        self.state_manager.state_changed.connect(
+            self.operator_window.update_global_state
+        )
+        self.operator_window.update_global_state(self.state_manager.state)
+
     def _start_listening(self):
         if not self.state_manager.is_idle():
             return
@@ -354,6 +359,10 @@ class SortingController(QObject):
                 "SESSIONE NON SALVATA — RIPROVA PRIMA DI CHIUDERE"
             )
             return False
+        self.operator_window.update_session_info(
+            self.session_context,
+            blocked=False,
+        )
         logger.info(event)
         return True
 
