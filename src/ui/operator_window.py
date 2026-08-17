@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from PySide6.QtCore import (
     Qt,
     Signal,
@@ -39,6 +37,9 @@ class OperatorWindow(QMainWindow):
     listening_ambiguous = Signal()
     listening_failed = Signal()
 
+    undo_last_requested = Signal()
+    reset_participant_requested = Signal(dict)
+
     def __init__(self):
         super().__init__()
 
@@ -47,14 +48,12 @@ class OperatorWindow(QMainWindow):
         )
 
         self.resize(
+            1000,
             900,
-            700,
         )
 
-        self.repository = ParticipantRepository(
-            Path(
-                "data/partecipanti_example.xlsx"
-            )
+        self.repository = (
+            ParticipantRepository()
         )
 
         self.participants = (
@@ -67,10 +66,12 @@ class OperatorWindow(QMainWindow):
 
         self.hotwords = ", ".join(
             participant["nome_completo"]
-            for participant in self.participants
+            for participant
+            in self.participants
         )
 
         self.selected_participant = None
+        self.selected_processed_participant = None
 
         self.processing = False
         self.voice_processing = False
@@ -134,13 +135,29 @@ class OperatorWindow(QMainWindow):
             """
         )
 
-        self.status_label = QLabel(
-            f"Partecipanti caricati: "
-            f"{len(self.participants)}"
+        self.file_label = QLabel(
+            "File partecipanti: "
+            f"{self.repository.file_path.name}"
         )
+
+        self.file_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.status_label = QLabel("")
 
         self.status_label.setAlignment(
             Qt.AlignCenter
+        )
+
+        self.status_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                padding: 6px;
+            }
+            """
         )
 
         self.process_label = QLabel(
@@ -151,32 +168,12 @@ class OperatorWindow(QMainWindow):
             Qt.AlignCenter
         )
 
-        self.process_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 16px;
-                font-weight: bold;
-                color: #28a745;
-                padding: 8px;
-            }
-            """
-        )
-
         self.transcription_label = QLabel(
             "Voce riconosciuta: -"
         )
 
         self.transcription_label.setAlignment(
             Qt.AlignCenter
-        )
-
-        self.transcription_label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 18px;
-                padding: 8px;
-            }
-            """
         )
 
         self.listen_button = QPushButton(
@@ -210,18 +207,6 @@ class OperatorWindow(QMainWindow):
 
         self.results_list = QListWidget()
 
-        self.results_list.setStyleSheet(
-            """
-            QListWidget {
-                font-size: 20px;
-            }
-
-            QListWidget::item {
-                padding: 10px;
-            }
-            """
-        )
-
         self.selection_label = QLabel(
             "Nessun partecipante selezionato"
         )
@@ -230,15 +215,11 @@ class OperatorWindow(QMainWindow):
             Qt.AlignCenter
         )
 
-        self.selection_label.setStyleSheet(
-            """
-            font-size: 22px;
-            font-weight: bold;
-            padding: 15px;
-            """
-        )
-
         button_layout = QHBoxLayout()
+
+        self.clear_button = QPushButton(
+            "Pulisci"
+        )
 
         self.confirm_button = QPushButton(
             "Conferma"
@@ -246,28 +227,6 @@ class OperatorWindow(QMainWindow):
 
         self.confirm_button.setEnabled(
             False
-        )
-
-        self.confirm_button.setStyleSheet(
-            """
-            QPushButton {
-                font-size: 20px;
-                padding: 12px 30px;
-            }
-            """
-        )
-
-        self.clear_button = QPushButton(
-            "Pulisci"
-        )
-
-        self.clear_button.setStyleSheet(
-            """
-            QPushButton {
-                font-size: 20px;
-                padding: 12px 30px;
-            }
-            """
         )
 
         button_layout.addWidget(
@@ -278,8 +237,74 @@ class OperatorWindow(QMainWindow):
             self.confirm_button
         )
 
+        processed_title = QLabel(
+            "Partecipanti già passati"
+        )
+
+        processed_title.setAlignment(
+            Qt.AlignCenter
+        )
+
+        processed_title.setStyleSheet(
+            """
+            QLabel {
+                font-size: 20px;
+                font-weight: bold;
+                padding-top: 15px;
+            }
+            """
+        )
+
+        self.processed_list = QListWidget()
+
+        self.processed_list.setStyleSheet(
+            """
+            QListWidget {
+                font-size: 18px;
+            }
+
+            QListWidget::item {
+                padding: 8px;
+            }
+            """
+        )
+
+        tracking_button_layout = (
+            QHBoxLayout()
+        )
+
+        self.undo_button = QPushButton(
+            "ANNULLA ULTIMA"
+        )
+
+        self.undo_button.setEnabled(
+            False
+        )
+
+        self.reset_selected_button = (
+            QPushButton(
+                "RESET SELEZIONATO"
+            )
+        )
+
+        self.reset_selected_button.setEnabled(
+            False
+        )
+
+        tracking_button_layout.addWidget(
+            self.undo_button
+        )
+
+        tracking_button_layout.addWidget(
+            self.reset_selected_button
+        )
+
         main_layout.addWidget(
             title
+        )
+
+        main_layout.addWidget(
+            self.file_label
         )
 
         main_layout.addWidget(
@@ -314,6 +339,18 @@ class OperatorWindow(QMainWindow):
             button_layout
         )
 
+        main_layout.addWidget(
+            processed_title
+        )
+
+        main_layout.addWidget(
+            self.processed_list
+        )
+
+        main_layout.addLayout(
+            tracking_button_layout
+        )
+
     def _connect_events(self):
         self.listen_button.clicked.connect(
             self._start_voice_recognition
@@ -343,11 +380,131 @@ class OperatorWindow(QMainWindow):
             self._clear_search
         )
 
-    def _start_voice_recognition(self):
-        if self.processing:
+        self.processed_list.itemSelectionChanged.connect(
+            self._select_processed_participant
+        )
+
+        self.undo_button.clicked.connect(
+            self.undo_last_requested.emit
+        )
+
+        self.reset_selected_button.clicked.connect(
+            self._request_processed_reset
+        )
+
+    def update_tracking_status(
+        self,
+        total: int,
+        processed: int,
+        remaining: int,
+    ):
+        self.status_label.setText(
+            f"Totali: {total}   |   "
+            f"Completati: {processed}   |   "
+            f"Rimanenti: {remaining}"
+        )
+
+        self.undo_button.setEnabled(
+            processed > 0
+        )
+
+    def update_processed_list(
+        self,
+        participants: list[dict],
+    ):
+        self.processed_list.clear()
+
+        self.selected_processed_participant = None
+
+        self.reset_selected_button.setEnabled(
+            False
+        )
+
+        for participant in reversed(
+            participants
+        ):
+            item = QListWidgetItem(
+                f"{participant['nome_completo']} "
+                f"→ {participant['squadra']}"
+            )
+
+            item.setData(
+                Qt.UserRole,
+                participant,
+            )
+
+            self.processed_list.addItem(
+                item
+            )
+
+    def _select_processed_participant(
+        self,
+    ):
+        item = (
+            self.processed_list.currentItem()
+        )
+
+        if not item:
+            self.selected_processed_participant = None
+
+            self.reset_selected_button.setEnabled(
+                False
+            )
+
             return
 
-        if self.voice_processing:
+        self.selected_processed_participant = (
+            item.data(
+                Qt.UserRole
+            )
+        )
+
+        self.reset_selected_button.setEnabled(
+            True
+        )
+
+    def _request_processed_reset(
+        self,
+    ):
+        if not self.selected_processed_participant:
+            return
+
+        self.reset_participant_requested.emit(
+            self.selected_processed_participant
+        )
+
+    def show_already_processed(
+        self,
+        participant: dict,
+    ):
+        self.process_label.setText(
+            "STATO: GIÀ ASSEGNATO"
+        )
+
+        self.selection_label.setText(
+            f"{participant['nome_completo']} "
+            "è già stato processato"
+        )
+
+        self.set_processing(
+            False
+        )
+
+        self.search_input.setFocus()
+
+    def show_tracking_message(
+        self,
+        message: str,
+    ):
+        self.process_label.setText(
+            message
+        )
+
+    def _start_voice_recognition(self):
+        if (
+            self.processing
+            or self.voice_processing
+        ):
             return
 
         self.voice_processing = True
@@ -596,10 +753,10 @@ class OperatorWindow(QMainWindow):
         self,
         text,
     ):
-        if self.processing:
-            return
-
-        if self.voice_processing:
+        if (
+            self.processing
+            or self.voice_processing
+        ):
             return
 
         self.results_list.clear()
@@ -629,9 +786,7 @@ class OperatorWindow(QMainWindow):
             ]
 
             item = QListWidgetItem(
-                participant[
-                    "nome_completo"
-                ]
+                participant["nome_completo"]
             )
 
             item.setData(
@@ -649,10 +804,10 @@ class OperatorWindow(QMainWindow):
             )
 
     def _select_current_result(self):
-        if self.processing:
-            return
-
-        if self.voice_processing:
+        if (
+            self.processing
+            or self.voice_processing
+        ):
             return
 
         item = (
@@ -677,9 +832,7 @@ class OperatorWindow(QMainWindow):
         )
 
         self.selection_label.setText(
-            participant[
-                "nome_completo"
-            ]
+            participant["nome_completo"]
         )
 
         self.confirm_button.setEnabled(
@@ -690,10 +843,10 @@ class OperatorWindow(QMainWindow):
         self,
         item,
     ):
-        if self.processing:
-            return
-
-        if self.voice_processing:
+        if (
+            self.processing
+            or self.voice_processing
+        ):
             return
 
         self.selected_participant = (
@@ -705,10 +858,10 @@ class OperatorWindow(QMainWindow):
         self._confirm_selection()
 
     def _confirm_or_select_first(self):
-        if self.processing:
-            return
-
-        if self.voice_processing:
+        if (
+            self.processing
+            or self.voice_processing
+        ):
             return
 
         if self.selected_participant:
@@ -725,28 +878,15 @@ class OperatorWindow(QMainWindow):
         self._confirm_selection()
 
     def _confirm_selection(self):
-        if self.processing:
+        if (
+            self.processing
+            or self.voice_processing
+            or not self.selected_participant
+        ):
             return
-
-        if self.voice_processing:
-            return
-
-        if not self.selected_participant:
-            return
-
-        participant = (
-            self.selected_participant
-        )
-
-        print(
-            f"SELEZIONATO: "
-            f"{participant['nome_completo']} "
-            f"-> "
-            f"{participant['squadra']}"
-        )
 
         self.participant_confirmed.emit(
-            participant
+            self.selected_participant
         )
 
     def set_processing(
@@ -776,16 +916,9 @@ class OperatorWindow(QMainWindow):
                 False
             )
 
-            if self.selected_participant:
-                self.selection_label.setText(
-                    f"In elaborazione: "
-                    f"{self.selected_participant['nome_completo']}"
-                )
-
             self.process_label.setText(
                 "STATO: ELABORAZIONE"
             )
-
         else:
             self.process_label.setText(
                 "STATO: PRONTO"
@@ -793,7 +926,6 @@ class OperatorWindow(QMainWindow):
 
     def reset_for_next_participant(self):
         self.search_input.clear()
-
         self.results_list.clear()
 
         self.selected_participant = None
@@ -833,14 +965,13 @@ class OperatorWindow(QMainWindow):
         self.search_input.setFocus()
 
     def _clear_search(self):
-        if self.processing:
-            return
-
-        if self.voice_processing:
+        if (
+            self.processing
+            or self.voice_processing
+        ):
             return
 
         self.search_input.clear()
-
         self.results_list.clear()
 
         self.selected_participant = None
