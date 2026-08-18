@@ -71,3 +71,7 @@ di più squadre, dieci cicli consecutivi e successivo utilizzo del microfono.
 Non sono inclusi file vocali definitivi. Non sono presenti TTS, streaming,
 cloning vocale, mixer multicanale o lip-sync a fonemi/visemi. La bocca usa una
 pulsazione visiva semplice sincronizzata allo stato di playback.
+# Sincronizzazione reveal avanzato
+
+La clip della squadra parte al segnale `TEAM_APPEAR`, dopo il flash e insieme
+alla comparsa di nome e logo. Una clip assente non modifica i timing visuali.

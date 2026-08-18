@@ -59,6 +59,7 @@ class SortingController(QObject):
 
         self.current_participant = None
         self._flow_token = 0
+        self._reveal_audio_deferred = False
 
         self._connect_events()
         self._update_tracking_ui()
@@ -91,6 +92,14 @@ class SortingController(QObject):
         self.operator_window.new_event_requested.connect(
             self.start_new_event
         )
+        preview_requested = getattr(
+            self.operator_window, "reveal_preview_requested", None
+        )
+        if (
+            hasattr(type(self.operator_window), "reveal_preview_requested")
+            and preview_requested is not None
+        ):
+            preview_requested.connect(self.preview_reveal)
 
         if self.character_audio_manager is not None:
             face_widget = getattr(self.public_window, "face_widget", None)
@@ -108,6 +117,14 @@ class SortingController(QObject):
         self.public_window.reveal_finished.connect(
             self._finish_sorting
         )
+        reveal_visible = getattr(self.public_window, "reveal_visible", None)
+        if (
+            hasattr(type(self.public_window), "reveal_visible")
+            and reveal_visible is not None
+            and hasattr(reveal_visible, "connect")
+        ):
+            reveal_visible.connect(self._play_reveal_audio)
+            self._reveal_audio_deferred = True
 
         self.state_manager.state_changed.connect(
             self.operator_window.update_global_state
@@ -270,17 +287,37 @@ class SortingController(QObject):
             "Reveal started: team=%s",
             participant["squadra"],
         )
-        if self.character_audio_manager is not None:
-            self.character_audio_manager.play_reveal(participant["squadra"])
-
         try:
             self.public_window.show_team(
                 participant["nome_completo"],
                 participant["squadra"],
             )
+            if not self._reveal_audio_deferred:
+                self._play_reveal_audio()
         except Exception:
             logger.exception("Team reveal failed")
             self.recover_to_idle("ERRORE DISPLAY PUBBLICO")
+
+    def _play_reveal_audio(self):
+        if self.current_participant is None or self.character_audio_manager is None:
+            return
+        logger.info(
+            "Reveal audio started: team=%s",
+            self.current_participant["squadra"],
+        )
+        self.character_audio_manager.play_reveal(
+            self.current_participant["squadra"]
+        )
+
+    def preview_reveal(self, team: str) -> None:
+        """Avvia la sola presentazione pubblica, senza tracking o sessione."""
+        if not self.state_manager.is_idle() or self.current_participant is not None:
+            return
+        logger.info("Reveal preview started: team=%s", team)
+        try:
+            self.public_window.show_team("", team)
+        except Exception:
+            logger.exception("Reveal preview failed")
 
     def _finish_sorting(self):
         if self.current_participant is None:

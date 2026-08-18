@@ -34,6 +34,11 @@ class AppSettings:
     character_audio_enabled: bool = True
     character_audio_volume: float = 0.8
     character_audio_output_device_id: str | None = None
+    reveal_pre_reveal_ms: int = 500
+    reveal_flash_ms: int = 180
+    reveal_appear_ms: int = 500
+    reveal_hold_ms: int = 2200
+    reveal_fade_ms: int = 500
 
     def resolve_project_path(
         self,
@@ -110,6 +115,13 @@ class SettingsLoader:
             "volume": 0.8,
             "output_device_id": None,
         },
+        "reveal": {
+            "pre_reveal_ms": 500,
+            "flash_ms": 180,
+            "appear_ms": 500,
+            "hold_ms": 2200,
+            "fade_ms": 500,
+        },
     }
 
     def __init__(
@@ -148,6 +160,14 @@ class SettingsLoader:
             }
         else:
             values["character_audio"] = raw_character_audio
+        raw_reveal = raw_settings.get("reveal", {})
+        if isinstance(raw_reveal, dict):
+            values["reveal"] = {
+                **self.DEFAULTS["reveal"],
+                **raw_reveal,
+            }
+        else:
+            values["reveal"] = raw_reveal
 
         self._validate(values)
 
@@ -192,6 +212,11 @@ class SettingsLoader:
             character_audio_output_device_id=(
                 values["character_audio"]["output_device_id"]
             ),
+            reveal_pre_reveal_ms=values["reveal"]["pre_reveal_ms"],
+            reveal_flash_ms=values["reveal"]["flash_ms"],
+            reveal_appear_ms=values["reveal"]["appear_ms"],
+            reveal_hold_ms=values["reveal"]["hold_ms"],
+            reveal_fade_ms=values["reveal"]["fade_ms"],
         )
 
     def save_character_audio(
@@ -502,6 +527,18 @@ class SettingsLoader:
             raise SettingsError(
                 "'character_audio.output_device_id' deve essere null o una stringa."
             )
+
+        reveal = values.get("reveal")
+        if not isinstance(reveal, dict):
+            raise SettingsError("'reveal' deve essere un oggetto JSON.")
+        for key in (
+            "pre_reveal_ms", "flash_ms", "appear_ms", "hold_ms", "fade_ms"
+        ):
+            duration = reveal.get(key)
+            if isinstance(duration, bool) or not isinstance(duration, int) or duration < 0:
+                raise SettingsError(
+                    f"'reveal.{key}' deve essere un intero maggiore o uguale a zero."
+                )
 
     @staticmethod
     def _require_non_empty_string(

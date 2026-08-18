@@ -106,3 +106,8 @@ essere verificato sulla macchina Windows usata durante l'evento.
 Dal redesign amministratore selezione monitor, fullscreen e riposizionamento
 sono raccolti nella pagina IMPOSTAZIONI; l'header e le altre pagine non alterano
 la finestra pubblica.
+# Reveal avanzato
+
+Il display pubblico usa una sequenza Qt non bloccante in cinque fasi, con
+generation token, background cover, particelle leggere e fallback statici. Non
+vengono mostrati ID o informazioni tecniche.

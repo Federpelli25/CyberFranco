@@ -72,6 +72,7 @@ class OperatorWindow(QMainWindow):
     public_display_changed = Signal(int, bool)
     new_event_requested = Signal()
     team_assets_reloaded = Signal()
+    reveal_preview_requested = Signal(str)
 
     def __init__(
         self,
@@ -423,7 +424,7 @@ class OperatorWindow(QMainWindow):
         self.team_preview_name_label.setAlignment(Qt.AlignCenter)
         self.team_preview_name_label.setObjectName("previewTeamName")
         team_buttons = QHBoxLayout()
-        self.preview_team_button = QPushButton("ANTEPRIMA SQUADRA")
+        self.preview_team_button = QPushButton("ANTEPRIMA REVEAL")
         self.reload_team_assets_button = QPushButton(
             "RICARICA CONFIGURAZIONE E ASSET"
         )
@@ -901,7 +902,7 @@ class OperatorWindow(QMainWindow):
         self.test_character_audio_button.clicked.connect(
             self._test_character_audio
         )
-        self.preview_team_button.clicked.connect(self._show_team_preview)
+        self.preview_team_button.clicked.connect(self._launch_team_reveal_preview)
         self.reload_team_assets_button.clicked.connect(
             self._reload_team_assets
         )
@@ -1004,6 +1005,12 @@ class OperatorWindow(QMainWindow):
             + "border-radius: 10px; font-size: 24px; font-weight: 800;"
             + "padding: 18px; }"
         )
+
+    def _launch_team_reveal_preview(self):
+        self._show_team_preview()
+        key = self.team_preview_combo.currentData()
+        if self.team_config_loader.get(key or "") is not None:
+            self.reveal_preview_requested.emit(str(key))
 
     def _reload_team_assets(self):
         self.team_config_loader.reload()

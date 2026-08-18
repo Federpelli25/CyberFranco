@@ -23,5 +23,12 @@
     "enabled": true,
     "volume": 0.8,
     "output_device_id": "7b302e302e302e30303030303030307d2e7b62303761393532622d303832392d343136662d386135312d3836393062656265303762367d"
+  },
+  "reveal": {
+    "pre_reveal_ms": 500,
+    "flash_ms": 180,
+    "appear_ms": 500,
+    "hold_ms": 2200,
+    "fade_ms": 500
   }
 }

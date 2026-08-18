@@ -27,6 +27,7 @@ class FakeOperatorWindow:
         self.undo_last_requested = FakeSignal()
         self.reset_participant_requested = FakeSignal()
         self.new_event_requested = FakeSignal()
+        self.reveal_preview_requested = FakeSignal()
 
         self.processing = False
         self.tracking_status = None
@@ -217,6 +218,14 @@ class SortingControllerTrackingTests(unittest.TestCase):
             AppState.IDLE,
         )
         self.assertEqual(self.operator.reset_count, 1)
+
+    def test_reveal_preview_does_not_process_or_persist_participant(self):
+        self.controller.preview_reveal("BLU")
+
+        self.assertEqual(self.public.revealed_teams, [("", "BLU")])
+        self.assertEqual(self.tracker.processed_count, 0)
+        self.assertIsNone(self.controller.current_participant)
+        self.assertEqual(self.state_manager.state, AppState.IDLE)
 
     def test_processed_participant_cannot_start_second_reveal(self):
         self.tracker.mark_processed(self.mario)

@@ -24,6 +24,8 @@ from src.config.settings_loader import AppSettings
 from src.ui.display_manager import DisplayManager
 from src.ui.face_widget import FaceWidget
 from src.config.team_config_loader import TeamConfigLoader
+from src.ui.reveal_controller import RevealController, RevealPhase, RevealTimings
+from src.ui.team_reveal import TeamReveal
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ logger = logging.getLogger(__name__)
 class PublicWindow(QMainWindow):
 
     reveal_finished = Signal()
+    reveal_visible = Signal()
     team_warning = Signal(str)
 
     def __init__(
@@ -63,8 +66,20 @@ class PublicWindow(QMainWindow):
         self.size_animation = None
         self._visual_generation = 0
         self._team_pixmap_cache = {}
+        self.reveal_controller = RevealController(
+            RevealTimings(
+                pre_reveal_ms=settings.reveal_pre_reveal_ms,
+                flash_ms=settings.reveal_flash_ms,
+                appear_ms=settings.reveal_appear_ms,
+                hold_ms=settings.reveal_hold_ms,
+                fade_ms=settings.reveal_fade_ms,
+            ),
+            self,
+        )
 
         self._build_ui()
+        self.reveal_controller.phase_changed.connect(self._on_reveal_phase)
+        self.reveal_controller.completed.connect(self._reset_after_reveal)
         self.show_idle()
         self.reload_team_assets()
 
@@ -152,6 +167,7 @@ class PublicWindow(QMainWindow):
 
     def _build_ui(self):
         self.central_widget = QWidget()
+        self.central_widget.setObjectName("publicRoot")
 
         self.setCentralWidget(
             self.central_widget
@@ -198,6 +214,16 @@ class PublicWindow(QMainWindow):
 
         self.layout.addStretch()
 
+        self.team_reveal = TeamReveal(self.central_widget)
+        self.team_reveal.hide()
+        self.team_reveal_effect = QGraphicsOpacityEffect(self.team_reveal)
+        self.team_reveal.setGraphicsEffect(self.team_reveal_effect)
+        self.flash_overlay = QWidget(self.central_widget)
+        self.flash_overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.flash_overlay.hide()
+        self.flash_effect = QGraphicsOpacityEffect(self.flash_overlay)
+        self.flash_overlay.setGraphicsEffect(self.flash_effect)
+
         self.layout.addWidget(self.face_widget, 1)
 
         self.layout.addWidget(
@@ -216,10 +242,12 @@ class PublicWindow(QMainWindow):
         if self.face_widget.state != FaceWidget.IDLE:
             self.face_widget.set_idle()
         self.face_widget.setVisible(True)
+        self.team_reveal.hide()
+        self.flash_overlay.hide()
 
         self.central_widget.setStyleSheet(
             """
-            QWidget {
+            QWidget#publicRoot {
                 background-color: #080808;
             }
             """
@@ -234,6 +262,7 @@ class PublicWindow(QMainWindow):
         self.main_label.setText(
             "Dimmi il tuo nome..."
         )
+        self.main_label.show()
 
         self.main_label.setStyleSheet(
             """
@@ -264,7 +293,7 @@ class PublicWindow(QMainWindow):
 
         self.central_widget.setStyleSheet(
             f"""
-            QWidget {{
+            QWidget#publicRoot {{
                 background:
                     qradialgradient(
                         cx: 0.5,
@@ -314,7 +343,7 @@ class PublicWindow(QMainWindow):
 
         self.central_widget.setStyleSheet(
             """
-            QWidget {
+            QWidget#publicRoot {
                 background:
                     qradialgradient(
                         cx: 0.5,
@@ -364,7 +393,7 @@ class PublicWindow(QMainWindow):
 
         self.central_widget.setStyleSheet(
             """
-            QWidget {
+            QWidget#publicRoot {
                 background:
                     qradialgradient(
                         cx: 0.5,
@@ -406,7 +435,6 @@ class PublicWindow(QMainWindow):
     ):
         self._stop_current_animation()
         self._visual_generation += 1
-        generation = self._visual_generation
         self.face_widget.set_reveal()
         self.face_widget.setVisible(True)
 
@@ -441,11 +469,60 @@ class PublicWindow(QMainWindow):
         self.opacity_effect.setOpacity(
             0.0
         )
+        logo = self._team_pixmap_cache.get(team_config.logo_path)
+        background = self._team_pixmap_cache.get(team_config.background_path)
+        self.team_reveal.configure(team_config, logo, background)
+        self.team_reveal.setGeometry(self.central_widget.rect())
+        self.flash_overlay.setGeometry(self.central_widget.rect())
+        self.team_reveal_effect.setOpacity(0.0)
+        self.team_reveal.hide()
+        logger.info("Reveal started: team=%s", team_config.key)
+        self.reveal_controller.start()
 
-        QTimer.singleShot(
-            220,
-            lambda: self._begin_team_reveal(generation),
-        )
+    def _on_reveal_phase(self, phase: RevealPhase) -> None:
+        try:
+            if phase == RevealPhase.PRE_REVEAL:
+                self.face_widget.set_reveal()
+                self.face_widget.setVisible(True)
+                return
+            if phase == RevealPhase.FLASH_IN:
+                accent = (
+                    self.team_reveal._team.secondary_color
+                    if self.team_reveal._team else "#DDF8FF"
+                )
+                self.flash_overlay.setStyleSheet(f"background-color: {accent};")
+                self.flash_effect.setOpacity(0.34)
+                self.flash_overlay.show()
+                self.flash_overlay.raise_()
+                return
+            if phase == RevealPhase.TEAM_APPEAR:
+                self.flash_overlay.hide()
+                self.face_widget.setVisible(False)
+                self.logo_label.hide()
+                self.main_label.hide()
+                self.team_reveal.set_intensity(1.25)
+                self.team_reveal_effect.setOpacity(1.0)
+                self.team_reveal.show()
+                self.team_reveal.raise_()
+                logger.info("Team reveal shown")
+                self.reveal_visible.emit()
+                return
+            if phase == RevealPhase.HOLD:
+                self.team_reveal.set_intensity(1.0)
+                return
+            if phase == RevealPhase.FADE_OUT:
+                fade = QPropertyAnimation(self.team_reveal_effect, b"opacity", self)
+                fade.setDuration(self.settings.reveal_fade_ms)
+                fade.setStartValue(self.team_reveal_effect.opacity())
+                fade.setEndValue(0.0)
+                fade.setEasingCurve(QEasingCurve.InCubic)
+                self.reveal_animation = fade
+                fade.start()
+        except Exception:
+            logger.exception("Reveal visual phase failed: %s", phase.value)
+            self.team_reveal_effect.setOpacity(1.0)
+            self.team_reveal.show()
+            logger.warning("Reveal fallback used")
 
     def set_state(self, state) -> None:
         """Adatta la faccia allo stato autorevole dell'applicazione."""
@@ -477,7 +554,7 @@ class PublicWindow(QMainWindow):
 
             self.central_widget.setStyleSheet(
                 f"""
-                QWidget {{
+                QWidget#publicRoot {{
                     background-image:
                         url("{normalized_path}");
                     background-position: center;
@@ -493,7 +570,7 @@ class PublicWindow(QMainWindow):
 
         self.central_widget.setStyleSheet(
             f"""
-            QWidget {{
+            QWidget#publicRoot {{
                 background:
                     qradialgradient(
                         cx: 0.5,
@@ -676,14 +753,20 @@ class PublicWindow(QMainWindow):
         )
 
     def _reset_after_reveal(self):
-        logger.info("Reveal completed")
         self.show_idle()
 
         self.reveal_finished.emit()
 
     def _stop_current_animation(self):
+        self.reveal_controller.abort(emit_signal=False)
         if self.reveal_animation is not None:
             self.reveal_animation.stop()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "team_reveal"):
+            self.team_reveal.setGeometry(self.central_widget.rect())
+            self.flash_overlay.setGeometry(self.central_widget.rect())
 
     def closeEvent(self, event):
         self._visual_generation += 1

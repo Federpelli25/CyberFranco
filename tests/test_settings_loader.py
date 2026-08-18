@@ -63,6 +63,8 @@ class SettingsLoaderTests(unittest.TestCase):
         )
         self.assertEqual(settings.logging_max_bytes, 5242880)
         self.assertEqual(settings.logging_backup_count, 3)
+        self.assertEqual(settings.reveal_pre_reveal_ms, 500)
+        self.assertEqual(settings.reveal_hold_ms, 2200)
 
     def test_values_override_defaults(self):
         self.write_settings(
@@ -95,6 +97,11 @@ class SettingsLoaderTests(unittest.TestCase):
     def test_invalid_session_persistence_flag_is_rejected(self):
         self.write_settings({"session_persistence_enabled": "yes"})
         with self.assertRaisesRegex(SettingsError, "session_persistence_enabled"):
+            self.loader.load()
+
+    def test_reveal_timing_must_be_non_negative_integer(self):
+        self.write_settings({"reveal": {"flash_ms": -1}})
+        with self.assertRaisesRegex(SettingsError, "reveal.flash_ms"):
             self.loader.load()
 
     def test_relative_paths_are_resolved_from_project_root(self):

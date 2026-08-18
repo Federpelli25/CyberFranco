@@ -66,3 +66,8 @@ risoluzioni 1280x720 e 1920x1080.
 
 La GUI non crea o modifica strutturalmente le squadre e non scarica asset. Non
 sono supportati video background, database o editor grafici completi.
+# Integrazione reveal avanzato
+
+Gli asset precaricati vengono ora passati a `TeamReveal`, che applica crop cover
+al background e fallback a gradiente quando background o logo non sono presenti.
+La sezione operatore include inoltre l'anteprima completa e sicura del reveal.
