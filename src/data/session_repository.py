@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class SessionRepository:
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self, file_path: str | Path):
         self.file_path = Path(file_path)
@@ -138,21 +138,23 @@ class SessionRepository:
         for entry in data["processed"]:
             if not isinstance(entry, dict):
                 raise SessionValidationError("Entry processata non valida.")
-            for field in ("key", "name", "team", "processed_at"):
+            for field in ("participant_id", "name", "team", "processed_at"):
                 if not isinstance(entry.get(field), str) or not entry[field].strip():
                     raise SessionValidationError(
                         f"Campo processed non valido: {field}."
                     )
             cls._validate_timestamp(entry["processed_at"])
-            if entry["key"] in seen:
+            if entry["participant_id"] in seen:
                 raise SessionValidationError(
-                    f"Chiave processata duplicata: {entry['key']}."
+                    "ID partecipante processato duplicato: "
+                    f"{entry['participant_id']}."
                 )
-            seen.add(entry["key"])
+            seen.add(entry["participant_id"])
 
     @staticmethod
     def participants_fingerprint(participants: list[dict]) -> str:
         stable_rows = sorted(
+            f"{str(item.get('id', '')).strip()}|"
             f"{str(item.get('search_name', '')).strip().casefold()}|"
             f"{str(item.get('squadra', '')).strip().casefold()}"
             for item in participants

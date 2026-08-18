@@ -18,6 +18,7 @@ def create_operator_window():
     loader = SettingsLoader()
     settings = replace(
         loader.load(),
+        participants_file="data/partecipanti_example.xlsx",
         whisper_model_path=str(Path(temporary.name) / "missing-model"),
     )
     device = {

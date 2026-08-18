@@ -18,8 +18,7 @@ def make_participant(
         "search_name": nome_completo.lower(),
     }
 
-    if participant_id is not None:
-        participant["id"] = participant_id
+    participant["id"] = participant_id or f"{nome}-{cognome}-{squadra}"
 
     return participant
 
@@ -56,6 +55,14 @@ class ParticipantTrackerTests(unittest.TestCase):
         self.assertIsNone(
             self.tracker.get_last_processed()
         )
+
+    def test_duplicate_names_are_tracked_independently_by_id(self):
+        first = make_participant("Mario", "Rossi", participant_id="001")
+        second = make_participant("Mario", "Rossi", participant_id="002")
+        tracker = ParticipantTracker([first, second])
+        tracker.mark_processed(first)
+        self.assertTrue(tracker.is_processed(first))
+        self.assertFalse(tracker.is_processed(second))
 
     def test_mark_processed_updates_history_and_counters(self):
         self.assertTrue(
@@ -212,7 +219,7 @@ class ParticipantTrackerTests(unittest.TestCase):
     def test_invalid_participant_is_rejected(self):
         with self.assertRaisesRegex(
             ValueError,
-            "search_name",
+            "ID valido",
         ):
             self.tracker.mark_processed(
                 {"nome_completo": "Dato incompleto"}

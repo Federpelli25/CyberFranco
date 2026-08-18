@@ -1,5 +1,6 @@
 from src.data.participant_repository import ParticipantRepository
 from src.recognition.name_matcher import NameMatcher
+import unittest
 
 
 repository = ParticipantRepository(
@@ -72,3 +73,25 @@ test_resolve("Mario Rosi")
 test_resolve("fede")
 test_resolve("Federico Pellegrini")
 test_resolve("persona inesistente")
+
+
+class DuplicateNameMatcherTests(unittest.TestCase):
+
+    def test_unique_exact_name_is_a_match(self):
+        unique = [
+            item for item in participants
+            if item["search_name"] == "luca bianchi"
+        ]
+        result = NameMatcher(unique).resolve("Luca Bianchi")
+        self.assertEqual(result["status"], NameMatcher.STATUS_MATCH)
+
+    def test_duplicate_exact_name_is_ambiguous_at_score_100(self):
+        duplicates = [
+            item for item in participants
+            if item["search_name"] == "mario rossi"
+        ]
+        result = NameMatcher(duplicates).resolve("Mario Rossi")
+        self.assertEqual(result["status"], NameMatcher.STATUS_AMBIGUOUS)
+        self.assertEqual(result["reason"], "duplicate_exact_name")
+        self.assertEqual(len(result["results"]), 2)
+        self.assertTrue(all(item["score"] == 100 for item in result["results"]))

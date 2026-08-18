@@ -63,7 +63,7 @@ class SessionPersistenceTests(unittest.TestCase):
     def test_tracker_restore_preserves_history_and_timestamp(self):
         timestamp = "2026-08-17T15:00:00+02:00"
         self.tracker.load_processed([{
-            "key": "name:mario rossi",
+            "participant_id": self.mario["id"],
             "name": "Mario Rossi",
             "team": "BLU",
             "processed_at": timestamp,
@@ -71,13 +71,28 @@ class SessionPersistenceTests(unittest.TestCase):
         self.assertTrue(self.tracker.is_processed(self.mario))
         self.assertEqual(self.tracker.export_state()[0]["processed_at"], timestamp)
 
+    def test_restore_distinguishes_duplicate_names_by_id(self):
+        first = make_participant("Mario", "Rossi", "BLU", "001")
+        second = make_participant("Mario", "Rossi", "ROSSA", "002")
+        tracker = ParticipantTracker([first, second])
+        tracker.load_processed([{
+            "participant_id": "002",
+            "name": "Mario Rossi",
+            "team": "ROSSA",
+            "processed_at": "2026-08-17T15:00:00+02:00",
+        }])
+        self.assertFalse(tracker.is_processed(first))
+        self.assertTrue(tracker.is_processed(second))
+
     def test_reveal_completion_persists_processed_participant(self):
         with patch.object(SortingController, "_start_reveal"):
             self.controller.start_sorting(self.mario)
         self.controller._finish_sorting()
 
         self.repository.save.assert_called_once_with(self.context)
-        self.assertEqual(self.context["processed"][0]["key"], "name:mario rossi")
+        self.assertEqual(
+            self.context["processed"][0]["participant_id"], self.mario["id"]
+        )
 
     def test_undo_and_reset_are_persisted(self):
         self.tracker.mark_processed(self.mario)

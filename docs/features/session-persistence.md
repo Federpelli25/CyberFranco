@@ -20,11 +20,11 @@ Le impostazioni sono centralizzate in `config/settings.json`:
 Con la persistenza disabilitata il tracker torna a funzionare solo in memoria.
 `data/session*.json` è escluso da Git perché contiene nomi di partecipanti.
 
-## Formato versione 1
+## Formato versione 2
 
 La sessione contiene `version`, `created_at`, `updated_at`,
 `participants_file`, `participants_fingerprint` e lo storico `processed`. Ogni
-entry processata salva soltanto chiave interna, nome, squadra e `processed_at`.
+entry processata salva `participant_id`, nome, squadra e `processed_at`.
 I timestamp sono ISO 8601 con timezone. Non vengono salvati audio, trascrizioni,
 punteggi fuzzy o configurazioni hardware.
 
@@ -44,8 +44,8 @@ reset vengono persistiti subito dopo l'aggiornamento in memoria.
 
 ## Fingerprint e mismatch
 
-Il fingerprint SHA-256 deriva dalle coppie ordinate e normalizzate
-`search_name + squadra`. Se non coincide, lo storico vecchio non viene caricato
+Il fingerprint SHA-256 deriva dalle righe ordinate e normalizzate
+`ID + search_name + squadra`. Se non coincide, lo storico vecchio non viene caricato
 e il sorting resta bloccato. La sessione su disco non viene sovrascritta finché
 l'operatore non conferma **NUOVO EVENTO**.
 
@@ -58,7 +58,9 @@ azzera tracker e storico persistito senza modificare Excel.
 ## Sessione corrotta
 
 JSON malformato, schema incompleto, timestamp senza timezone, entry duplicate o
-versione sconosciuta producono un errore controllato. Il file viene preservato
+versione sconosciuta producono un errore controllato. Le sessioni v1 sono
+considerate legacy incompatibili perché non garantiscono un'associazione sicura
+in presenza di omonimi. Il file viene preservato
 come `session.corrupted.<timestamp>.json`; l'app crea una sessione vuota e mostra
 un warning. Un errore di lettura non recuperabile abilita la modalità in memoria.
 
@@ -90,7 +92,7 @@ fallimento di scrittura.
 
 ## Limiti
 
-Non sono previsti migrazioni oltre la versione 1, sincronizzazione tra PC,
+Non è prevista la migrazione automatica delle sessioni v1, né sincronizzazione tra PC,
 backup remoto o recovery di modifiche rimaste solo in memoria dopo un errore di
 scrittura. La persistenza resta locale al computer dell'evento.
 

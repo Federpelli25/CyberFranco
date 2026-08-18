@@ -60,6 +60,24 @@ class OperatorWorkflowTests(unittest.TestCase):
                 self.window.all_participants_list.item(index).text().casefold(),
             )
 
+    def test_participant_filter_and_rows_include_id(self):
+        participant = self.window.participants[0]
+        self.window.participants_filter_input.setText(participant["id"])
+        self.assertGreater(self.window.all_participants_list.count(), 0)
+        self.assertIn(
+            participant["id"], self.window.all_participants_list.item(0).text()
+        )
+
+    def test_duplicate_manual_search_shows_distinct_ids(self):
+        self.window.search_input.setText("Mario Rossi")
+        rows = [
+            self.window.results_list.item(index).text()
+            for index in range(self.window.results_list.count())
+        ]
+        self.assertGreaterEqual(len(rows), 2)
+        self.assertTrue(any("ID 001" in row for row in rows))
+        self.assertTrue(any("ID 002" in row for row in rows))
+
     def test_enter_confirms_selected_candidate(self):
         participant = self.window.participants[0]
         self.window.search_input.setText(participant["nome_completo"])

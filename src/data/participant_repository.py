@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class ParticipantRepository:
 
-    REQUIRED_COLUMNS = {"Nome", "Cognome", "Squadra"}
+    REQUIRED_COLUMNS = {"ID", "Nome", "Cognome", "Squadra"}
     DEFAULT_REAL_FILE = Path("data/partecipanti.xlsx")
     DEFAULT_EXAMPLE_FILE = Path("data/partecipanti_example.xlsx")
 
@@ -81,7 +81,8 @@ class ParticipantRepository:
                 for column in self.REQUIRED_COLUMNS
             }
             participants = []
-            seen_names = set()
+            seen_ids: dict[str, int] = {}
+            name_rows: dict[str, list[int]] = {}
 
             for row_number, row in enumerate(rows, start=2):
                 values = {
@@ -102,11 +103,12 @@ class ParticipantRepository:
                     )
                     raise ParticipantDataError(
                         "FILE PARTECIPANTI NON VALIDO\n\n"
-                        f"La riga {row_number} contiene nome, cognome "
+                        f"La riga {row_number} contiene ID, nome, cognome "
                         "o squadra vuoti."
                     )
 
                 participant = {
+                    "id": str(values["ID"]).strip(),
                     "nome": str(values["Nome"]).strip(),
                     "cognome": str(values["Cognome"]).strip(),
                     "squadra": str(values["Squadra"]).strip(),
@@ -118,20 +120,24 @@ class ParticipantRepository:
                     participant["nome_completo"].casefold()
                 )
 
-                if participant["search_name"] in seen_names:
+                if participant["id"] in seen_ids:
                     logger.error(
-                        "Duplicate participant: file=%s row=%d name=%s",
+                        "Duplicate participant ID: file=%s rows=%d,%d id=%s",
                         self.file_path,
+                        seen_ids[participant["id"]],
                         row_number,
-                        participant["nome_completo"],
+                        participant["id"],
                     )
                     raise ParticipantDataError(
-                        "FILE PARTECIPANTI NON VALIDO\n\n"
-                        "Partecipante duplicato: "
-                        f"{participant['nome_completo']}."
+                        "ID PARTECIPANTE DUPLICATO\n\n"
+                        f"L'ID {participant['id']} è presente più volte "
+                        "nel file Excel."
                     )
 
-                seen_names.add(participant["search_name"])
+                seen_ids[participant["id"]] = row_number
+                name_rows.setdefault(participant["search_name"], []).append(
+                    row_number
+                )
                 participants.append(participant)
 
             if not participants:
@@ -142,7 +148,20 @@ class ParticipantRepository:
                 )
 
             self.participants = participants
-            logger.info("Participants loaded: %d", len(participants))
+            duplicate_names = {
+                name: rows for name, rows in name_rows.items() if len(rows) > 1
+            }
+            for name, duplicate_rows in duplicate_names.items():
+                logger.warning(
+                    "Duplicate participant name supported: name=%s rows=%s",
+                    name,
+                    duplicate_rows,
+                )
+            logger.info(
+                "Participants loaded: count=%d ids=%s",
+                len(participants),
+                [participant["id"] for participant in participants],
+            )
             return participants
         finally:
             workbook.close()

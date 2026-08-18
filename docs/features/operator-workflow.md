@@ -40,7 +40,9 @@ Contiene soltanto contatori operativi, messaggio di processo, `ASCOLTA`,
 trascrizione, ricerca manuale, suggerimenti, partecipante/squadra selezionati e
 i comandi PULISCI/CONFERMA. Un match sicuro prosegue senza conferma aggiuntiva.
 Un match ambiguo mostra `RICONOSCIMENTO DA CONFERMARE`, seleziona il primo
-candidato e sposta il focus sulla lista.
+candidato e sposta il focus sulla lista. Se l'ambiguità deriva da omonimi
+esatti, il messaggio chiede esplicitamente di scegliere il partecipante corretto
+e ogni candidato mostra ID e squadra.
 
 Le interazioni da tastiera sono locali alla pagina:
 
@@ -54,7 +56,7 @@ emergenza display `Ctrl+Shift+F`, introdotta dalla feature multi-monitor.
 ## Pagina PARTECIPANTI
 
 Mostra contatori, elenco completo e storico cronologico. L'elenco completo
-indica `DA PROCESSARE` o `COMPLETATO` e può essere filtrato localmente per nome,
+indica `ID | Nome | Squadra | Stato` e può essere filtrato localmente per ID, nome,
 cognome, nome completo o squadra. Undo e reset continuano a usare tracker e
 persistenza esistenti.
 

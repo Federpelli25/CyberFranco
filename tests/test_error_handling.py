@@ -54,21 +54,21 @@ class ParticipantErrorHandlingTests(unittest.TestCase):
 
     def test_duplicate_participant_is_rejected(self):
         temporary, path = self._workbook([
-            ["Nome", "Cognome", "Squadra"],
-            ["Mario", "Rossi", "Blu"],
-            [" mario ", "ROSSI", "Rossa"],
+            ["ID", "Nome", "Cognome", "Squadra"],
+            ["001", "Mario", "Rossi", "Blu"],
+            ["001", "Luca", "Bianchi", "Rossa"],
         ])
         with temporary:
             with self.assertRaisesRegex(
                 ParticipantDataError,
-                "Partecipante duplicato",
+                "ID PARTECIPANTE DUPLICATO",
             ):
                 ParticipantRepository(path).load()
 
     def test_incomplete_row_is_rejected(self):
         temporary, path = self._workbook([
-            ["Nome", "Cognome", "Squadra"],
-            ["Mario", None, "Blu"],
+            ["ID", "Nome", "Cognome", "Squadra"],
+            ["001", "Mario", None, "Blu"],
         ])
         with temporary:
             with self.assertRaisesRegex(ParticipantDataError, "riga 2"):

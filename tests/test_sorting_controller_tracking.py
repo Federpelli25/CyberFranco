@@ -104,9 +104,10 @@ class FakePublicWindow:
         )
 
 
-def make_participant(nome, cognome, squadra):
+def make_participant(nome, cognome, squadra, participant_id=None):
     nome_completo = f"{nome} {cognome}"
     return {
+        "id": participant_id or f"{nome}-{cognome}-{squadra}",
         "nome": nome,
         "cognome": cognome,
         "squadra": squadra,

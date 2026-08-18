@@ -50,6 +50,7 @@ class WhisperMissingGuiTests(unittest.TestCase):
             missing_path = Path(temporary_directory) / "missing"
             settings = replace(
                 settings,
+                participants_file="data/partecipanti_example.xlsx",
                 whisper_model_path=str(missing_path),
             )
             window = OperatorWindow(

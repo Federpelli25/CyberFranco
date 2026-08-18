@@ -1217,7 +1217,7 @@ class OperatorWindow(QMainWindow):
             False
         )
         self._processed_participant_keys = {
-            str(participant.get("search_name", "")).casefold()
+            str(participant.get("id", "")).strip()
             for participant in participants
         }
 
@@ -1225,7 +1225,7 @@ class OperatorWindow(QMainWindow):
             participants
         ):
             item = QListWidgetItem(
-                f"{participant['nome_completo']} "
+                f"ID {participant['id']} — {participant['nome_completo']} "
                 f"→ {participant['squadra']}"
             )
 
@@ -1250,17 +1250,18 @@ class OperatorWindow(QMainWindow):
                 str(participant.get("cognome", "")),
                 str(participant.get("nome_completo", "")),
                 str(participant.get("squadra", "")),
+                str(participant.get("id", "")),
             )).casefold()
             if query and query not in searchable:
                 continue
             completed = (
-                str(participant.get("search_name", "")).casefold()
+                str(participant.get("id", "")).strip()
                 in self._processed_participant_keys
             )
             status = "COMPLETATO" if completed else "DA PROCESSARE"
             self.all_participants_list.addItem(
-                f"{participant['nome_completo']} — "
-                f"{participant['squadra']} — {status}"
+                f"{participant['id']} | {participant['nome_completo']} | "
+                f"{participant['squadra']} | {status}"
             )
 
     def _select_processed_participant(
@@ -1623,9 +1624,15 @@ class OperatorWindow(QMainWindow):
             )
             logger.warning("Voice match ambiguous")
 
-            self.process_label.setText(
-                "RICONOSCIMENTO DA CONFERMARE"
-            )
+            if result.get("reason") == "duplicate_exact_name":
+                self.process_label.setText(
+                    "PIÙ PARTECIPANTI CON LO STESSO NOME — "
+                    "SELEZIONA QUELLO CORRETTO"
+                )
+            else:
+                self.process_label.setText(
+                    "RICONOSCIMENTO DA CONFERMARE"
+                )
 
             self.listening_ambiguous.emit()
 
@@ -1723,8 +1730,8 @@ class OperatorWindow(QMainWindow):
             ]
 
             item = QListWidgetItem(
-                f"{participant['nome_completo']} "
-                f"({score}%)"
+                f"{participant['nome_completo']} — ID {participant['id']} — "
+                f"Squadra {participant['squadra']} ({score}%)"
             )
 
             item.setData(
@@ -1780,7 +1787,8 @@ class OperatorWindow(QMainWindow):
             ]
 
             item = QListWidgetItem(
-                participant["nome_completo"]
+                f"{participant['nome_completo']} — ID {participant['id']} — "
+                f"Squadra {participant['squadra']}"
             )
 
             item.setData(

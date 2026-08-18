@@ -17,8 +17,8 @@ assegnazioni duplicate e mantenendo contatori e storico coerenti.
 - aggiorna elenco e contatori nella console operatore;
 - mantiene lo stato esclusivamente in memoria e non modifica l'Excel.
 
-La chiave interna usa la colonna opzionale `ID`, quando disponibile. In sua
-assenza utilizza `search_name`.
+La chiave interna usa sempre la colonna obbligatoria `ID`. `search_name` non è
+più accettato come fallback di identità.
 
 ## Componenti coinvolti
 
@@ -34,8 +34,8 @@ tests/test_sorting_controller_tracking.py
 
 ## Errori e fallback
 
-Un partecipante privo sia di `ID` sia di `search_name` viene rifiutato con un
-errore esplicito. Il reset di un partecipante non completato non modifica lo
+Un partecipante privo di `ID` viene rifiutato con un errore esplicito. Il reset
+di un partecipante non completato non modifica lo
 stato e produce un messaggio per l'operatore.
 
 ## Test
@@ -56,8 +56,8 @@ Sono presenti test automatici per:
 
 ## Limiti attuali
 
-Gli omonimi sono distinti correttamente dal tracker soltanto quando l'Excel
-fornisce un `ID` univoco.
+Il tracker richiede che tutti i partecipanti provengano da un dataset già
+validato con ID univoci.
 
 ## Persistenza
 

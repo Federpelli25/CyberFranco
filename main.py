@@ -119,14 +119,21 @@ def main() -> int:
         logger.info("Session file: %s", session_repository.file_path)
         try:
             session_context = session_repository.load()
-        except SessionValidationError:
-            logger.exception("Session corrupted")
+        except SessionValidationError as exc:
+            logger.exception("Session invalid or incompatible")
             try:
                 preserved = session_repository.quarantine_corrupted()
-                session_message = (
-                    "SESSIONE CORROTTA — AVVIATA SESSIONE VUOTA\n"
-                    f"Backup: {preserved.name if preserved else '-'}"
-                )
+                if "Versione sessione non supportata" in str(exc):
+                    session_message = (
+                        "SESSIONE LEGACY NON COMPATIBILE — "
+                        "AVVIATO UN NUOVO EVENTO\n"
+                        f"Backup: {preserved.name if preserved else '-'}"
+                    )
+                else:
+                    session_message = (
+                        "SESSIONE CORROTTA — AVVIATA SESSIONE VUOTA\n"
+                        f"Backup: {preserved.name if preserved else '-'}"
+                    )
             except SessionError:
                 logger.exception("Corrupted session quarantine failed")
                 session_message = "SESSIONE CORROTTA — BACKUP NON RIUSCITO"

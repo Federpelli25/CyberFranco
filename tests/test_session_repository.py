@@ -31,7 +31,7 @@ class SessionRepositoryTests(unittest.TestCase):
     def test_empty_session_save_and_load(self):
         self.repository.save(self.session)
         loaded = self.repository.load()
-        self.assertEqual(loaded["version"], 1)
+        self.assertEqual(loaded["version"], 2)
         self.assertEqual(loaded["processed"], [])
 
     def test_save_uses_temporary_file_before_atomic_replace(self):
@@ -80,11 +80,13 @@ class SessionRepositoryTests(unittest.TestCase):
 
     def test_fingerprint_is_deterministic_but_detects_changes(self):
         first = [
-            {"search_name": "mario rossi", "squadra": "Blu"},
-            {"search_name": "luca bianchi", "squadra": "Rossa"},
+            {"id": "001", "search_name": "mario rossi", "squadra": "Blu"},
+            {"id": "002", "search_name": "luca bianchi", "squadra": "Rossa"},
         ]
         reordered = list(reversed(first))
-        changed = [*first[:-1], {"search_name": "luca bianchi", "squadra": "Verde"}]
+        changed = [*first[:-1], {
+            "id": "002", "search_name": "luca bianchi", "squadra": "Verde"
+        }]
         self.assertEqual(
             self.repository.participants_fingerprint(first),
             self.repository.participants_fingerprint(reordered),
@@ -92,6 +94,11 @@ class SessionRepositoryTests(unittest.TestCase):
         self.assertNotEqual(
             self.repository.participants_fingerprint(first),
             self.repository.participants_fingerprint(changed),
+        )
+        changed_id = [{**first[0], "id": "999"}, first[1]]
+        self.assertNotEqual(
+            self.repository.participants_fingerprint(first),
+            self.repository.participants_fingerprint(changed_id),
         )
 
     def test_write_failure_is_wrapped_and_temp_removed(self):

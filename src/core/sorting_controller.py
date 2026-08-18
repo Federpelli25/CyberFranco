@@ -169,8 +169,8 @@ class SortingController(QObject):
             participant
         ):
             logger.warning(
-                "Participant already processed: %s",
-                participant["search_name"],
+                "Participant already processed: participant_id=%s",
+                participant["id"],
             )
             self.state_manager.set_state(
                 AppState.IDLE
@@ -190,8 +190,8 @@ class SortingController(QObject):
         self._flow_token += 1
         flow_token = self._flow_token
         logger.info(
-            "Participant confirmed: %s",
-            participant["nome_completo"],
+            "Participant selected by ID: participant_id=%s name=%s",
+            participant["id"], participant["nome_completo"],
         )
 
         self.operator_window.set_processing(
@@ -263,8 +263,8 @@ class SortingController(QObject):
             self.recover_to_idle("ERRORE ASSEGNAZIONE")
             return
         logger.info(
-            "Assignment completed: %s; team=%s",
-            participant["nome_completo"],
+            "Assignment completed: participant_id=%s name=%s team=%s",
+            participant["id"], participant["nome_completo"],
             participant["squadra"],
         )
 

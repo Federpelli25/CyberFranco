@@ -24,25 +24,10 @@ class ParticipantTracker:
     def _participant_key(
         participant: Participant,
     ) -> str:
-        participant_id = participant.get("id")
-
-        if participant_id is not None:
-            normalized_id = str(participant_id).strip()
-
-            if normalized_id:
-                return f"id:{normalized_id}"
-
-        search_name = str(
-            participant.get("search_name", "")
-        ).strip().lower()
-
-        if not search_name:
-            raise ValueError(
-                "Il partecipante deve avere un ID "
-                "oppure un search_name valido."
-            )
-
-        return f"name:{search_name}"
+        participant_id = str(participant.get("id", "")).strip()
+        if not participant_id:
+            raise ValueError("Il partecipante deve avere un ID valido.")
+        return participant_id
 
     def mark_processed(
         self,
@@ -161,7 +146,7 @@ class ParticipantTracker:
         restored_timestamps = {}
 
         for entry in entries:
-            key = str(entry.get("key", ""))
+            key = str(entry.get("participant_id", "")).strip()
             participant = participants_by_key.get(key)
             if participant is None:
                 raise ValueError(
@@ -183,7 +168,7 @@ class ParticipantTracker:
         for participant in self._history:
             key = self._participant_key(participant)
             result.append({
-                "key": key,
+                "participant_id": key,
                 "name": str(participant["nome_completo"]),
                 "team": str(participant["squadra"]),
                 "processed_at": self._processed_at[key],

@@ -14,10 +14,11 @@ class NameMatcher:
     def __init__(self, participants: list[dict]):
         self.participants = participants
 
-        self.search_map = {
-            participant["search_name"]: participant
-            for participant in participants
-        }
+        self.search_map: dict[str, list[dict]] = {}
+        for participant in participants:
+            self.search_map.setdefault(participant["search_name"], []).append(
+                participant
+            )
 
         self.choices = list(self.search_map.keys())
 
@@ -47,7 +48,7 @@ class NameMatcher:
         results = prefix_matches.copy()
 
         already_added = {
-            match["participant"]["search_name"]
+            str(match["participant"]["id"])
             for match in results
         }
 
@@ -55,22 +56,18 @@ class NameMatcher:
             if matched_name in already_added:
                 continue
 
-            participant = self.search_map[
-                matched_name
-            ]
-
-            results.append(
-                {
+            for participant in self.search_map[matched_name]:
+                participant_id = str(participant["id"])
+                if participant_id in already_added:
+                    continue
+                results.append({
                     "participant": participant,
                     "score": round(score, 2),
                     "match_type": "fuzzy",
-                }
-            )
-
-            already_added.add(
-                matched_name
-            )
-
+                })
+                already_added.add(participant_id)
+                if len(results) >= limit:
+                    break
             if len(results) >= limit:
                 break
 
@@ -94,26 +91,39 @@ class NameMatcher:
                 query
             )
 
-        exact_participant = self.search_map.get(
+        exact_participants = self.search_map.get(
             normalized_query
         )
 
-        if exact_participant:
-            exact_match = {
-                "participant": exact_participant,
+        if exact_participants:
+            exact_matches = [{
+                "participant": participant,
                 "score": 100.0,
                 "match_type": "exact",
-            }
+            } for participant in exact_participants]
+            if len(exact_matches) > 1:
+                logger.warning(
+                    "Ambiguous exact-name duplicate: name=%s ids=%s",
+                    normalized_query,
+                    [item["participant"]["id"] for item in exact_matches],
+                )
+                return {
+                    "status": self.STATUS_AMBIGUOUS,
+                    "query": query,
+                    "best_match": exact_matches[0],
+                    "results": exact_matches,
+                    "reason": "duplicate_exact_name",
+                }
 
             logger.info(
-                "Match status: match; candidate=%s; score=100.0",
-                exact_participant["search_name"],
+                "Match status: match; participant_id=%s; score=100.0",
+                exact_participants[0]["id"],
             )
             return {
                 "status": self.STATUS_MATCH,
                 "query": query,
-                "best_match": exact_match,
-                "results": [exact_match],
+                "best_match": exact_matches[0],
+                "results": exact_matches,
             }
 
         results = self.search(
