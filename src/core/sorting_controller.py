@@ -31,6 +31,7 @@ class SortingController(QObject):
         session_repository=None,
         session_context: dict | None = None,
         session_blocked: bool = False,
+        character_audio_manager=None,
     ):
         super().__init__()
 
@@ -54,6 +55,7 @@ class SortingController(QObject):
         self.session_repository = session_repository
         self.session_context = session_context
         self.session_blocked = session_blocked
+        self.character_audio_manager = character_audio_manager
 
         self.current_participant = None
         self._flow_token = 0
@@ -90,6 +92,19 @@ class SortingController(QObject):
             self.start_new_event
         )
 
+        if self.character_audio_manager is not None:
+            face_widget = getattr(self.public_window, "face_widget", None)
+            if face_widget is not None:
+                self.character_audio_manager.started.connect(
+                    lambda: face_widget.set_talking(True)
+                )
+                self.character_audio_manager.finished.connect(
+                    lambda: face_widget.set_talking(False)
+                )
+                self.character_audio_manager.failed.connect(
+                    lambda _message: face_widget.set_talking(False)
+                )
+
         self.public_window.reveal_finished.connect(
             self._finish_sorting
         )
@@ -104,6 +119,13 @@ class SortingController(QObject):
 
     def _start_listening(self):
         if not self.state_manager.is_idle():
+            return
+
+        if (
+            self.character_audio_manager is not None
+            and self.character_audio_manager.is_playing
+        ):
+            logger.warning("Listening blocked while character audio is playing")
             return
 
         self.state_manager.set_state(
@@ -129,6 +151,11 @@ class SortingController(QObject):
         previous_state = self.state_manager.state
         self._flow_token += 1
         self.current_participant = None
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.stop()
+            face_widget = getattr(self.public_window, "face_widget", None)
+            if face_widget is not None:
+                face_widget.set_talking(False)
         self.state_manager.set_state(AppState.IDLE)
 
         try:
@@ -212,6 +239,8 @@ class SortingController(QObject):
             self.recover_to_idle("ERRORE DISPLAY PUBBLICO")
             return
         logger.info("Thinking started")
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.play_thinking()
 
         QTimer.singleShot(
             self.settings.thinking_duration_ms,
@@ -241,6 +270,8 @@ class SortingController(QObject):
             "Reveal started: team=%s",
             participant["squadra"],
         )
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.play_reveal(participant["squadra"])
 
         try:
             self.public_window.show_team(
@@ -254,6 +285,9 @@ class SortingController(QObject):
     def _finish_sorting(self):
         if self.current_participant is None:
             return
+
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.stop()
 
         participant = (
             self.current_participant

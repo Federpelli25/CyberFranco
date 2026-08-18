@@ -61,7 +61,7 @@ OPERATOR_STYLE_SHEET = """
         background-color: transparent;
         color: #f0f6fc;
     }
-    QLabel[secondary="true"] { color: #c4ccd6; }
+    QLabel[secondary="true"] { color: #d4dde7; }
     QLabel#headerTitle {
         color: #ffffff;
         font-size: 26px;
@@ -179,6 +179,52 @@ OPERATOR_STYLE_SHEET = """
         selection-color: #ffffff;
         selection-background-color: #1f6feb;
     }
+    QSlider::groove:horizontal {
+        height: 8px;
+        background-color: #303946;
+        border-radius: 4px;
+    }
+    QSlider::sub-page:horizontal {
+        background-color: #2f81f7;
+        border-radius: 4px;
+    }
+    QSlider::handle:horizontal {
+        width: 20px;
+        margin: -6px 0;
+        background-color: #f0f6fc;
+        border: 2px solid #58a6ff;
+        border-radius: 10px;
+    }
+    QLabel#technicalStatus {
+        color: #ffffff;
+        background-color: #21262d;
+        border: 1px solid #566273;
+        border-radius: 6px;
+        padding: 9px;
+        font-weight: 700;
+    }
+    QLabel#technicalStatus[statusLevel="ready"] {
+        background-color: #1f6f43;
+    }
+    QLabel#technicalStatus[statusLevel="warning"] {
+        background-color: #8a5200;
+    }
+    QLabel#technicalStatus[statusLevel="error"] {
+        background-color: #9e2636;
+    }
+    QLabel#teamPreview {
+        color: #f0f6fc;
+        background-color: #111820;
+        border: 1px solid #566273;
+        border-radius: 10px;
+        padding: 18px;
+    }
+    QLabel#previewTeamName {
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 800;
+        padding-top: 8px;
+    }
     QLineEdit { placeholder-text-color: #9da7b3; }
     QLineEdit:focus, QComboBox:focus, QListWidget:focus, QListView:focus {
         color: #ffffff;
@@ -243,6 +289,76 @@ OPERATOR_STYLE_SHEET = """
         subcontrol-origin: margin;
         left: 12px;
         padding: 0 6px;
+    }
+    QGroupBox[settingsCard="true"] {
+        color: #ffffff;
+        background-color: #1b2531;
+        border: 2px solid #64758a;
+        border-radius: 10px;
+        margin-top: 18px;
+        padding: 22px 18px 18px 18px;
+        font-size: 16px;
+        font-weight: 800;
+    }
+    QGroupBox[settingsCard="true"]::title {
+        color: #ffffff;
+        background-color: #253244;
+        border: 1px solid #718096;
+        border-radius: 5px;
+        subcontrol-origin: margin;
+        left: 14px;
+        padding: 5px 11px;
+    }
+    QGroupBox[settingsCard="true"] QLabel {
+        color: #f8fafc;
+        font-weight: 600;
+    }
+    QGroupBox[settingsCard="true"] QLabel[secondary="true"] {
+        color: #d7e0ea;
+        font-weight: 500;
+    }
+    QGroupBox[settingsCard="true"] QComboBox {
+        color: #ffffff;
+        background-color: #101923;
+        border: 2px solid #77889d;
+        border-radius: 7px;
+        padding: 9px 12px;
+        min-height: 24px;
+        font-weight: 650;
+    }
+    QGroupBox[settingsCard="true"] QComboBox:hover {
+        background-color: #172536;
+        border-color: #9db2ca;
+    }
+    QGroupBox[settingsCard="true"] QComboBox:focus {
+        border-color: #58a6ff;
+        background-color: #132238;
+    }
+    QGroupBox[settingsCard="true"] QComboBox:disabled {
+        color: #b3bfcc;
+        background-color: #252d37;
+        border-color: #566273;
+    }
+    QGroupBox[settingsCard="true"] QPushButton {
+        color: #ffffff;
+        background-color: #34465a;
+        border: 2px solid #7d8ea3;
+        border-radius: 7px;
+        padding: 10px 16px;
+        font-weight: 750;
+    }
+    QGroupBox[settingsCard="true"] QPushButton:hover {
+        background-color: #45617d;
+        border-color: #a9bed6;
+    }
+    QGroupBox[settingsCard="true"] QPushButton:pressed {
+        background-color: #1f6feb;
+        border-color: #9ac7ff;
+    }
+    QGroupBox[settingsCard="true"] QPushButton:disabled {
+        color: #b2bdc9;
+        background-color: #28313c;
+        border-color: #586575;
     }
     QScrollBar:vertical, QScrollBar:horizontal {
         background-color: #161b22;

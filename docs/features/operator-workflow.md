@@ -140,3 +140,21 @@ Label, group box, checkbox, input, combo, liste e relativi popup non dipendono
 più dalla palette chiara del sistema operativo. Gli stati usano sempre testo
 bianco oltre al colore distintivo; `GIÀ PROCESSATO` dispone di uno stato header
 dedicato. Il tema riguarda soltanto la console e non modifica `PublicWindow`.
+# Aggiornamento pagina IMPOSTAZIONI — Fase 13
+
+La pagina IMPOSTAZIONI usa quattro card ordinate: AUDIO IN INGRESSO, VOCE
+PERSONAGGIO, DISPLAY PUBBLICO e SQUADRE E ASSET. Ogni card include una
+descrizione orientata all'operatore, controlli larghi e uno stato testuale.
+Il tema resta quello centralizzato in `src/ui/operator_theme.py`, esteso per
+slider, badge tecnici e pannello anteprima.
+
+La card squadre mostra il numero di configurazioni valide, gli eventuali
+fallback, una combo e un'anteprima locale con nome, logo/background e colori.
+L'anteprima non avvia audio, sorting, reveal evento, tracking o persistenza. Il
+reload rilegge `teams.json`, invalida le cache e aggiorna display e combo.
+
+Le combo della pagina usano `NoWheelComboBox`: quando il menu è chiuso la
+rotellina viene ignorata dal controllo e continua a scorrere la pagina, evitando
+modifiche accidentali a microfono, uscita audio, monitor o anteprima. Il tema
+centralizzato assegna alle card un fondo più chiaro, bordi più marcati e
+contrasto superiore per testi, combo, pulsanti e stati disabilitati.

@@ -23,6 +23,8 @@ from src.ui.operator_window import OperatorWindow
 from src.ui.public_window import PublicWindow
 from src.ui.display_manager import DisplayManager
 from src.data.session_repository import SessionRepository
+from src.audio.character_audio_manager import CharacterAudioManager
+from src.config.team_config_loader import TeamConfigLoader
 
 
 def install_exception_handler() -> None:
@@ -76,13 +78,25 @@ def main() -> int:
 
     state_manager = StateManager()
     display_manager = DisplayManager(app)
+    team_config_loader = TeamConfigLoader(settings.project_root)
+    character_audio_manager = CharacterAudioManager(
+        project_root=settings.project_root,
+        enabled=settings.character_audio_enabled,
+        volume=settings.character_audio_volume,
+        output_device_id=settings.character_audio_output_device_id,
+        team_config_loader=team_config_loader,
+    )
     try:
         operator_window = OperatorWindow(
             settings,
             settings_loader,
             display_manager,
+            character_audio_manager,
+            team_config_loader,
         )
-        public_window = PublicWindow(settings, display_manager)
+        public_window = PublicWindow(
+            settings, display_manager, team_config_loader
+        )
     except ParticipantDataError as exc:
         logger.exception("Application startup blocked by participant data")
         QMessageBox.critical(
@@ -208,11 +222,16 @@ def main() -> int:
         session_repository=session_repository,
         session_context=session_context,
         session_blocked=session_blocked,
+        character_audio_manager=character_audio_manager,
     )
 
     operator_window.public_display_changed.connect(
         public_window.apply_display_settings
     )
+    operator_window.team_assets_reloaded.connect(
+        public_window.reload_team_assets
+    )
+    public_window.team_warning.connect(operator_window.show_warning)
 
     primary_screen = display_manager.get_primary_screen()
     if primary_screen is not None:

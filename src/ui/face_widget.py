@@ -192,7 +192,7 @@ class FaceWidget(QWidget):
         self._start_mesh_animation(duration=520)
 
     def set_talking(self, talking: bool) -> None:
-        """API predisposta per la futura fase voce, senza collegamenti audio."""
+        """Attiva una semplice risposta visiva, senza lip-sync fonetico."""
         self._talking = bool(talking)
         self.update()
 
@@ -448,6 +448,16 @@ class FaceWidget(QWidget):
     def _paint_mouth(self, painter, center, side, accent) -> None:
         mouth_y = center.y() + side * 0.215
         width = side * (0.12 + 0.055 * abs(self._mouth_expression))
+        if self._talking:
+            opening = 0.045 + 0.035 * (
+                0.5 + 0.5 * math.sin(self._mesh_phase * 5)
+            )
+            painter.setPen(self._glow_pen(accent, side * 0.012, 0.96))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(
+                QPointF(center.x(), mouth_y), side * 0.13, side * opening
+            )
+            return
         if self._state == self.LISTENING:
             painter.setPen(self._glow_pen(accent, side * 0.008, 0.82))
             painter.setBrush(Qt.NoBrush)
@@ -480,13 +490,14 @@ class FaceWidget(QWidget):
         painter.drawPath(mouth)
 
     def _mesh_activity(self) -> float:
-        return {
+        activity = {
             self.IDLE: 0.35,
             self.LISTENING: 0.75,
             self.THINKING: 1.35,
             self.AWAITING_CONFIRMATION: 0.65,
             self.REVEAL: 1.6,
         }.get(self._state, 0.35)
+        return activity + (0.45 if self._talking else 0.0)
 
     @staticmethod
     def _glow_pen(color, width, alpha):

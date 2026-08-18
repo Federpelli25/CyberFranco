@@ -5,7 +5,7 @@ from PySide6.QtCore import (
     Signal,
     QThread,
 )
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -16,13 +16,13 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QComboBox,
     QGroupBox,
     QCheckBox,
     QMessageBox,
     QStackedWidget,
     QButtonGroup,
     QScrollArea,
+    QSlider,
 )
 
 from src.audio.audio_device_manager import (
@@ -52,6 +52,8 @@ from src.recognition.name_matcher import (
 )
 from src.ui.display_manager import DisplayManager
 from src.ui.operator_theme import apply_operator_theme
+from src.config.team_config_loader import TeamConfigLoader
+from src.ui.no_wheel_combo_box import NoWheelComboBox
 
 
 logger = logging.getLogger(__name__)
@@ -69,18 +71,25 @@ class OperatorWindow(QMainWindow):
     reset_participant_requested = Signal(dict)
     public_display_changed = Signal(int, bool)
     new_event_requested = Signal()
+    team_assets_reloaded = Signal()
 
     def __init__(
         self,
         settings: AppSettings,
         settings_loader: SettingsLoader,
         display_manager: DisplayManager | None = None,
+        character_audio_manager=None,
+        team_config_loader: TeamConfigLoader | None = None,
     ):
         super().__init__()
 
         self.settings = settings
         self.settings_loader = settings_loader
         self.display_manager = display_manager or DisplayManager()
+        self.character_audio_manager = character_audio_manager
+        self.team_config_loader = team_config_loader or TeamConfigLoader(
+            settings.project_root
+        )
         self.preferred_display_index = settings.public_display_monitor
         self.audio_device_manager = AudioDeviceManager()
         self.current_microphone_device = (
@@ -266,18 +275,26 @@ class OperatorWindow(QMainWindow):
         )
 
         microphone_group = QGroupBox(
-            "MICROFONO"
+            "AUDIO IN INGRESSO"
         )
+        microphone_group.setProperty("settingsCard", True)
         microphone_layout = QVBoxLayout(
             microphone_group
         )
+        microphone_description = QLabel(
+            "Scegli il microfono usato per ascoltare i partecipanti."
+        )
+        microphone_description.setProperty("secondary", True)
+        microphone_description.setWordWrap(True)
+        microphone_layout.addWidget(microphone_description)
+        microphone_layout.addWidget(QLabel("Microfono usato per ascoltare"))
 
-        self.microphone_combo = QComboBox()
+        self.microphone_combo = NoWheelComboBox()
         self.microphone_combo.setMinimumHeight(38)
 
         microphone_button_layout = QHBoxLayout()
         self.refresh_microphones_button = QPushButton(
-            "AGGIORNA DISPOSITIVI"
+            "AGGIORNA MICROFONI"
         )
         self.test_microphone_button = QPushButton(
             "TEST MICROFONO"
@@ -292,6 +309,7 @@ class OperatorWindow(QMainWindow):
         self.active_microphone_label = QLabel(
             "Microfono attivo: caricamento..."
         )
+        self.active_microphone_label.setObjectName("technicalStatus")
         self.active_microphone_label.setWordWrap(True)
 
         self.microphone_test_label = QLabel(
@@ -313,11 +331,21 @@ class OperatorWindow(QMainWindow):
         )
 
         display_group = QGroupBox("DISPLAY PUBBLICO")
+        display_group.setProperty("settingsCard", True)
         display_layout = QVBoxLayout(display_group)
-        self.display_combo = QComboBox()
+        display_description = QLabel(
+            "Scegli lo schermo sul quale il pubblico vede il personaggio."
+        )
+        display_description.setProperty("secondary", True)
+        display_description.setWordWrap(True)
+        display_layout.addWidget(display_description)
+        display_layout.addWidget(QLabel("Schermo del pubblico"))
+        self.display_combo = NoWheelComboBox()
         self.display_combo.setMinimumHeight(38)
         self.refresh_displays_button = QPushButton("AGGIORNA MONITOR")
-        self.public_display_fullscreen_checkbox = QCheckBox("Fullscreen")
+        self.public_display_fullscreen_checkbox = QCheckBox(
+            "Modalità schermo intero"
+        )
         self.public_display_fullscreen_checkbox.setChecked(
             self.settings.public_display_fullscreen
         )
@@ -325,12 +353,89 @@ class OperatorWindow(QMainWindow):
             "APRI / RIPOSIZIONA DISPLAY"
         )
         self.display_status_label = QLabel("Rilevamento monitor...")
+        self.display_status_label.setObjectName("technicalStatus")
         self.display_status_label.setWordWrap(True)
         display_layout.addWidget(self.display_combo)
         display_layout.addWidget(self.refresh_displays_button)
         display_layout.addWidget(self.public_display_fullscreen_checkbox)
         display_layout.addWidget(self.apply_display_button)
         display_layout.addWidget(self.display_status_label)
+
+        character_audio_group = QGroupBox("VOCE PERSONAGGIO")
+        character_audio_group.setProperty("settingsCard", True)
+        character_audio_layout = QVBoxLayout(character_audio_group)
+        character_audio_description = QLabel(
+            "Scegli da dove deve uscire la voce locale del personaggio."
+        )
+        character_audio_description.setProperty("secondary", True)
+        character_audio_description.setWordWrap(True)
+        character_audio_layout.addWidget(character_audio_description)
+        self.character_audio_enabled_checkbox = QCheckBox(
+            "Audio personaggio abilitato"
+        )
+        self.character_audio_enabled_checkbox.setChecked(
+            self.settings.character_audio_enabled
+        )
+        self.output_device_combo = NoWheelComboBox()
+        self.output_device_combo.setMinimumHeight(38)
+        self.refresh_output_devices_button = QPushButton(
+            "AGGIORNA USCITE AUDIO"
+        )
+        self.character_volume_label = QLabel(
+            f"Volume: {round(self.settings.character_audio_volume * 100)}%"
+        )
+        self.character_volume_slider = QSlider(Qt.Horizontal)
+        self.character_volume_slider.setRange(0, 100)
+        self.character_volume_slider.setValue(
+            round(self.settings.character_audio_volume * 100)
+        )
+        self.test_character_audio_button = QPushButton("TEST AUDIO")
+        self.character_audio_status_label = QLabel("Audio locale pronto")
+        self.character_audio_status_label.setObjectName("technicalStatus")
+        self.character_audio_status_label.setWordWrap(True)
+        character_audio_layout.addWidget(self.character_audio_enabled_checkbox)
+        character_audio_layout.addWidget(QLabel("Uscita audio del personaggio"))
+        character_audio_layout.addWidget(self.output_device_combo)
+        character_audio_layout.addWidget(self.refresh_output_devices_button)
+        character_audio_layout.addWidget(self.character_volume_label)
+        character_audio_layout.addWidget(self.character_volume_slider)
+        character_audio_layout.addWidget(self.test_character_audio_button)
+        character_audio_layout.addWidget(self.character_audio_status_label)
+
+        team_assets_group = QGroupBox("SQUADRE E ASSET")
+        team_assets_group.setProperty("settingsCard", True)
+        team_assets_layout = QVBoxLayout(team_assets_group)
+        team_description = QLabel(
+            "Controlla nomi, logo, sfondi e colori caricati da teams.json."
+        )
+        team_description.setProperty("secondary", True)
+        team_description.setWordWrap(True)
+        self.team_assets_status_label = QLabel("Squadre: caricamento...")
+        self.team_assets_status_label.setObjectName("technicalStatus")
+        self.team_preview_combo = NoWheelComboBox()
+        self.team_preview_combo.setMinimumHeight(38)
+        self.team_preview_label = QLabel("Seleziona una squadra per l'anteprima")
+        self.team_preview_label.setObjectName("teamPreview")
+        self.team_preview_label.setAlignment(Qt.AlignCenter)
+        self.team_preview_label.setMinimumHeight(220)
+        self.team_preview_label.setWordWrap(True)
+        self.team_preview_name_label = QLabel("")
+        self.team_preview_name_label.setAlignment(Qt.AlignCenter)
+        self.team_preview_name_label.setObjectName("previewTeamName")
+        team_buttons = QHBoxLayout()
+        self.preview_team_button = QPushButton("ANTEPRIMA SQUADRA")
+        self.reload_team_assets_button = QPushButton(
+            "RICARICA CONFIGURAZIONE E ASSET"
+        )
+        team_buttons.addWidget(self.preview_team_button)
+        team_buttons.addWidget(self.reload_team_assets_button)
+        team_assets_layout.addWidget(team_description)
+        team_assets_layout.addWidget(self.team_assets_status_label)
+        team_assets_layout.addWidget(QLabel("Squadra da visualizzare"))
+        team_assets_layout.addWidget(self.team_preview_combo)
+        team_assets_layout.addLayout(team_buttons)
+        team_assets_layout.addWidget(self.team_preview_name_label)
+        team_assets_layout.addWidget(self.team_preview_label)
 
         self.public_display_shortcut = QShortcut(
             QKeySequence("Ctrl+Shift+F"),
@@ -516,9 +621,14 @@ class OperatorWindow(QMainWindow):
         self._apply_multipage_layout(
             microphone_group,
             display_group,
+            character_audio_group,
+            team_assets_group,
         )
 
-    def _apply_multipage_layout(self, microphone_group, display_group):
+    def _apply_multipage_layout(
+        self, microphone_group, display_group, character_audio_group,
+        team_assets_group,
+    ):
         for widget in (
             self.listen_button,
             self.search_input,
@@ -621,8 +731,11 @@ class OperatorWindow(QMainWindow):
         self.settings_page, settings_layout = self._create_scroll_page(
             "IMPOSTAZIONI"
         )
+        self.settings_page.setObjectName("settingsPage")
         settings_layout.addWidget(microphone_group)
+        settings_layout.addWidget(character_audio_group)
         settings_layout.addWidget(display_group)
+        settings_layout.addWidget(team_assets_group)
         settings_layout.addStretch()
 
         self.session_page, session_layout = self._create_scroll_page(
@@ -772,6 +885,248 @@ class OperatorWindow(QMainWindow):
         self.new_event_button.clicked.connect(
             self._confirm_new_event
         )
+
+        self.character_audio_enabled_checkbox.toggled.connect(
+            self._character_audio_enabled_changed
+        )
+        self.character_volume_slider.valueChanged.connect(
+            self._character_audio_volume_changed
+        )
+        self.output_device_combo.currentIndexChanged.connect(
+            self._output_device_changed
+        )
+        self.refresh_output_devices_button.clicked.connect(
+            self._manual_refresh_output_devices
+        )
+        self.test_character_audio_button.clicked.connect(
+            self._test_character_audio
+        )
+        self.preview_team_button.clicked.connect(self._show_team_preview)
+        self.reload_team_assets_button.clicked.connect(
+            self._reload_team_assets
+        )
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.started.connect(
+                self._character_audio_started
+            )
+            self.character_audio_manager.finished.connect(
+                self._character_audio_finished
+            )
+            self.character_audio_manager.failed.connect(
+                self._character_audio_failed
+            )
+            self.character_audio_manager.warning.connect(
+                self._character_audio_warning
+            )
+            self.character_audio_manager.devices_changed.connect(
+                self._populate_output_devices
+            )
+        self._populate_output_devices()
+        self._populate_team_preview()
+
+    def _populate_team_preview(self):
+        selected_key = self.team_preview_combo.currentData()
+        self.team_preview_combo.blockSignals(True)
+        self.team_preview_combo.clear()
+        self._team_preview_pixmaps = {}
+        for team in self.team_config_loader.teams:
+            self.team_preview_combo.addItem(team.display_name, team.key)
+            if team.logo_path is not None:
+                pixmap = QPixmap(str(team.logo_path))
+                if not pixmap.isNull():
+                    self._team_preview_pixmaps[team.key] = pixmap
+        selected_index = self.team_preview_combo.findData(selected_key)
+        self.team_preview_combo.setCurrentIndex(max(0, selected_index))
+        self.team_preview_combo.blockSignals(False)
+        count = self.team_config_loader.count
+        if count:
+            warning_count = len(self.team_config_loader.warnings)
+            detail = (
+                f" — {warning_count} avvisi, fallback disponibili"
+                if warning_count else " — configurazione completa"
+            )
+            self.team_assets_status_label.setText(
+                f"Squadre: {count} CONFIGURATE{detail}"
+            )
+            self.team_assets_status_label.setProperty(
+                "statusLevel", "warning" if warning_count else "ready"
+            )
+        else:
+            self.team_assets_status_label.setText(
+                "Squadre: CONFIGURAZIONE NON UTILIZZABILE"
+            )
+            self.team_assets_status_label.setProperty("statusLevel", "error")
+        self.team_assets_status_label.style().unpolish(
+            self.team_assets_status_label
+        )
+        self.team_assets_status_label.style().polish(
+            self.team_assets_status_label
+        )
+        enabled = count > 0
+        self.team_preview_combo.setEnabled(enabled)
+        self.preview_team_button.setEnabled(enabled)
+
+    def _show_team_preview(self):
+        key = self.team_preview_combo.currentData()
+        team = self.team_config_loader.get(key or "")
+        if team is None:
+            self.team_preview_label.setText("ANTEPRIMA NON DISPONIBILE")
+            self.team_preview_name_label.clear()
+            return
+        self.team_preview_name_label.setText(team.display_name)
+        pixmap = self._team_preview_pixmaps.get(team.key)
+        if pixmap is not None:
+            self.team_preview_label.setPixmap(
+                pixmap.scaled(
+                    200, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+            )
+        else:
+            self.team_preview_label.setPixmap(QPixmap())
+            self.team_preview_label.setText(
+                f"{team.display_name}\n\nLogo non disponibile — fallback attivo"
+            )
+        self.team_preview_label.setToolTip(
+            f"{team.display_name} — slug: {team.slug}"
+        )
+        background_rule = ""
+        if team.background_path is not None:
+            background_rule = (
+                f'background-image: url("{team.background_path.resolve().as_posix()}");'
+                "background-position: center; background-repeat: no-repeat;"
+            )
+        self.team_preview_label.setStyleSheet(
+            "QLabel#teamPreview {"
+            f"background-color: {team.primary_color};"
+            + background_rule
+            + f"color: {team.secondary_color};"
+            + "border: 2px solid " + team.secondary_color + ";"
+            + "border-radius: 10px; font-size: 24px; font-weight: 800;"
+            + "padding: 18px; }"
+        )
+
+    def _reload_team_assets(self):
+        self.team_config_loader.reload()
+        self._populate_team_preview()
+        self._show_team_preview()
+        self.team_assets_reloaded.emit()
+        if self.team_config_loader.count:
+            message = (
+                f"{self.team_config_loader.count} squadre caricate correttamente."
+            )
+            if self.team_config_loader.warnings:
+                message += " " + self.team_config_loader.warnings[0]
+            self.team_assets_status_label.setText(message)
+        else:
+            self.team_assets_status_label.setText(
+                self.team_config_loader.error
+                or "Configurazione squadre non utilizzabile."
+            )
+
+    def _populate_output_devices(self):
+        manager = self.character_audio_manager
+        self.output_device_combo.blockSignals(True)
+        self.output_device_combo.clear()
+        if manager is None:
+            self.output_device_combo.addItem("Audio non inizializzato", None)
+            self.output_device_combo.blockSignals(False)
+            self._update_character_audio_controls()
+            return
+        devices = manager.list_output_devices()
+        self.output_device_combo.addItem("Predefinito di sistema", None)
+        for device in devices:
+            suffix = " (predefinito)" if device["default"] else ""
+            self.output_device_combo.addItem(
+                device["name"] + suffix, device["id"]
+            )
+        selected = self.output_device_combo.findData(manager.output_device_id)
+        self.output_device_combo.setCurrentIndex(max(0, selected))
+        self.output_device_combo.blockSignals(False)
+        self.character_audio_status_label.setText(
+            f"Dispositivi output rilevati: {len(devices)}"
+            if devices else "NESSUNA USCITA AUDIO DISPONIBILE"
+        )
+        self._update_character_audio_controls()
+
+    def _manual_refresh_output_devices(self):
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.refresh_output_devices()
+        else:
+            self._populate_output_devices()
+
+    def _output_device_changed(self, index: int):
+        if index < 0 or self.character_audio_manager is None:
+            return
+        device_id = self.output_device_combo.itemData(index)
+        self.character_audio_manager.select_output_device(device_id)
+        self._save_character_audio_settings()
+
+    def _character_audio_enabled_changed(self, enabled: bool):
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.set_enabled(enabled)
+        self._save_character_audio_settings()
+        self._update_character_audio_controls()
+
+    def _character_audio_volume_changed(self, value: int):
+        self.character_volume_label.setText(f"Volume: {value}%")
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.set_volume(value / 100.0)
+        self._save_character_audio_settings()
+
+    def _save_character_audio_settings(self):
+        try:
+            self.settings_loader.save_character_audio(
+                self.character_audio_enabled_checkbox.isChecked(),
+                self.character_volume_slider.value() / 100.0,
+                self.output_device_combo.currentData(),
+            )
+        except SettingsError as exc:
+            logger.exception("Character audio settings could not be saved")
+            self.character_audio_status_label.setText(
+                f"Impostazioni voce non salvate: {exc}"
+            )
+
+    def _test_character_audio(self):
+        if self.character_audio_manager is None:
+            return
+        if self.character_audio_manager.is_playing:
+            self.character_audio_manager.stop()
+            return
+        if not self.character_audio_manager.play_test():
+            self.character_audio_status_label.setText(
+                "TRACCIA TEST AUDIO NON DISPONIBILE"
+            )
+
+    def _character_audio_started(self):
+        self.character_audio_status_label.setText("RIPRODUZIONE")
+        self.test_character_audio_button.setText("STOP AUDIO")
+        self._update_character_audio_controls()
+
+    def _character_audio_finished(self):
+        self.character_audio_status_label.setText("Audio terminato")
+        self.test_character_audio_button.setText("TEST AUDIO")
+        self._update_character_audio_controls()
+
+    def _character_audio_failed(self, message: str):
+        self.character_audio_status_label.setText(message)
+        self.test_character_audio_button.setText("TEST AUDIO")
+        self._update_character_audio_controls()
+
+    def _character_audio_warning(self, message: str):
+        self.show_warning(message)
+        self.character_audio_status_label.setText(message)
+        self._save_character_audio_settings()
+
+    def _update_character_audio_controls(self):
+        available = self.character_audio_manager is not None
+        enabled = self.character_audio_enabled_checkbox.isChecked()
+        playing = bool(
+            available and self.character_audio_manager.is_playing
+        )
+        self.output_device_combo.setEnabled(available and not playing)
+        self.refresh_output_devices_button.setEnabled(available and not playing)
+        self.character_volume_slider.setEnabled(available)
+        self.test_character_audio_button.setEnabled(available and enabled)
 
     def _refresh_displays(
         self,
@@ -1161,10 +1516,15 @@ class OperatorWindow(QMainWindow):
         self.microphone_test_thread = None
 
     def _update_audio_controls(self):
+        character_speaking = bool(
+            self.character_audio_manager is not None
+            and self.character_audio_manager.is_playing
+        )
         busy = (
             self.processing
             or self.voice_processing
             or self.microphone_test_processing
+            or character_speaking
         )
         has_microphone = bool(self.input_devices)
 
@@ -1182,6 +1542,7 @@ class OperatorWindow(QMainWindow):
             and self.speech_ready
             and not busy
         )
+        self._update_character_audio_controls()
 
     def update_tracking_status(
         self,
@@ -1409,6 +1770,10 @@ class OperatorWindow(QMainWindow):
             self.processing
             or self.voice_processing
             or self.microphone_test_processing
+            or (
+                self.character_audio_manager is not None
+                and self.character_audio_manager.is_playing
+            )
         ):
             return
 
@@ -1685,6 +2050,8 @@ class OperatorWindow(QMainWindow):
             if thread is not None and thread.isRunning():
                 thread.quit()
                 thread.wait(3000)
+        if self.character_audio_manager is not None:
+            self.character_audio_manager.stop()
         super().closeEvent(event)
 
     def _enable_manual_controls(self):

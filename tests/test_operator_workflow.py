@@ -6,6 +6,8 @@ from tests.operator_workflow_support import (
     close_operator_window,
     create_operator_window,
 )
+from src.ui.no_wheel_combo_box import NoWheelComboBox
+from src.ui.operator_theme import OPERATOR_STYLE_SHEET
 
 
 class OperatorWorkflowTests(unittest.TestCase):
@@ -25,6 +27,35 @@ class OperatorWorkflowTests(unittest.TestCase):
         self.assertTrue(
             self.window.settings_page.isAncestorOf(self.window.display_combo)
         )
+        self.assertTrue(
+            self.window.settings_page.isAncestorOf(self.window.output_device_combo)
+        )
+        self.assertTrue(
+            self.window.settings_page.isAncestorOf(self.window.team_preview_combo)
+        )
+
+    def test_all_settings_combos_ignore_closed_mouse_wheel(self):
+        for combo in (
+            self.window.microphone_combo,
+            self.window.output_device_combo,
+            self.window.display_combo,
+            self.window.team_preview_combo,
+        ):
+            self.assertIsInstance(combo, NoWheelComboBox)
+
+    def test_settings_cards_have_dedicated_high_contrast_theme(self):
+        self.assertIn('QGroupBox[settingsCard="true"]', OPERATOR_STYLE_SHEET)
+        self.assertIn("border: 2px solid #64758a", OPERATOR_STYLE_SHEET)
+        self.assertIn("background-color: #101923", OPERATOR_STYLE_SHEET)
+
+    def test_team_assets_card_supports_preview_without_event_side_effects(self):
+        self.window.show_page("settings")
+        self.assertEqual(self.window.team_preview_combo.count(), 4)
+        self.assertIn("CONFIGURATE", self.window.team_assets_status_label.text())
+        self.window.team_preview_combo.setCurrentIndex(0)
+        self.window.preview_team_button.click()
+        self.assertTrue(self.window.team_preview_name_label.text())
+        self.assertFalse(self.window.processing)
         self.assertFalse(
             self.window.event_page.isAncestorOf(self.window.microphone_combo)
         )

@@ -1,0 +1,38 @@
+{
+  "FENICI": {
+    "slug": "fenici",
+    "display_name": "Fenici",
+    "logo": "assets/teams/fenici/logo.png",
+    "background": "assets/teams/fenici/background.png",
+    "primary_color": "#D97706",
+    "secondary_color": "#FBBF24",
+    "audio": "assets/audio/reveal/fenici.wav"
+  },
+  "DRAGHI": {
+    "slug": "draghi",
+    "display_name": "Draghi",
+    "logo": "assets/teams/draghi/logo.png",
+    "background": "assets/teams/draghi/background.png",
+    "primary_color": "#7C3AED",
+    "secondary_color": "#C4B5FD",
+    "audio": "assets/audio/reveal/draghi.wav"
+  },
+  "TITANI": {
+    "slug": "titani",
+    "display_name": "Titani",
+    "logo": "assets/teams/titani/logo.png",
+    "background": null,
+    "primary_color": "#0369A1",
+    "secondary_color": "#7DD3FC",
+    "audio": "assets/audio/reveal/titani.wav"
+  },
+  "GRIFONI": {
+    "slug": "grifoni",
+    "display_name": "Grifoni",
+    "logo": "assets/teams/grifoni/logo.png",
+    "background": null,
+    "primary_color": "#047857",
+    "secondary_color": "#6EE7B7",
+    "audio": "assets/audio/reveal/grifoni.wav"
+  }
+}

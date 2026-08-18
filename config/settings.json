@@ -8,7 +8,7 @@
   "language": "it",
   "recording_duration_seconds": 4.0,
   "thinking_duration_ms": 1200,
-  "microphone_device": 1,
+  "microphone_device": null,
   "public_display_monitor": 1,
   "public_display_fullscreen": false,
   "session_file": "data/session.json",
@@ -18,5 +18,10 @@
     "file": "logs/cyberfranco.log",
     "max_bytes": 5242880,
     "backup_count": 3
+  },
+  "character_audio": {
+    "enabled": true,
+    "volume": 0.8,
+    "output_device_id": "7b302e302e302e30303030303030307d2e7b62303761393532622d303832392d343136662d386135312d3836393062656265303762367d"
   }
 }

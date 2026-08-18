@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from src.config.settings_loader import AppSettings
 from src.ui.display_manager import DisplayManager
 from src.ui.face_widget import FaceWidget
+from src.config.team_config_loader import TeamConfigLoader
 
 
 logger = logging.getLogger(__name__)
@@ -31,16 +32,21 @@ logger = logging.getLogger(__name__)
 class PublicWindow(QMainWindow):
 
     reveal_finished = Signal()
+    team_warning = Signal(str)
 
     def __init__(
         self,
         settings: AppSettings,
         display_manager: DisplayManager | None = None,
+        team_config_loader: TeamConfigLoader | None = None,
     ):
         super().__init__()
 
         self.settings = settings
         self.display_manager = display_manager or DisplayManager()
+        self.team_config_loader = team_config_loader or TeamConfigLoader(
+            settings.project_root
+        )
 
         self.setWindowTitle(
             "CyberFranco - Public Display"
@@ -51,17 +57,26 @@ class PublicWindow(QMainWindow):
             720,
         )
 
-        self.teams_root = settings.resolve_project_path(
-            "assets/teams"
-        )
         self.face_root = settings.resolve_project_path("assets/face")
 
         self.reveal_animation = None
         self.size_animation = None
         self._visual_generation = 0
+        self._team_pixmap_cache = {}
 
         self._build_ui()
         self.show_idle()
+        self.reload_team_assets()
+
+    def reload_team_assets(self):
+        """Precarica logo e background senza riavviare la finestra."""
+        self._team_pixmap_cache.clear()
+        for team in self.team_config_loader.teams:
+            for path in (team.logo_path, team.background_path):
+                if path is not None:
+                    pixmap = QPixmap(str(path))
+                    if not pixmap.isNull():
+                        self._team_pixmap_cache[path] = pixmap
 
     def show_configured(self):
         self.apply_display_settings(
@@ -248,8 +263,8 @@ class PublicWindow(QMainWindow):
         )
 
         self.central_widget.setStyleSheet(
-            """
-            QWidget {
+            f"""
+            QWidget {{
                 background:
                     qradialgradient(
                         cx: 0.5,
@@ -261,7 +276,7 @@ class PublicWindow(QMainWindow):
                         stop: 0.5 #091421,
                         stop: 1 #050505
                     );
-            }
+            }}
             """
         )
 
@@ -395,44 +410,28 @@ class PublicWindow(QMainWindow):
         self.face_widget.set_reveal()
         self.face_widget.setVisible(True)
 
-        team = team.strip()
-
-        if not team:
-            team = "SQUADRA"
-
-        logger.info("Public reveal: team=%s", team)
-
-        team_slug = (
-            self._slugify_team_name(
-                team
+        team_config = self.team_config_loader.resolve(team)
+        if not team_config.configured:
+            self.team_warning.emit(
+                f'La squadra "{team_config.display_name}" non è configurata. '
+                "Viene usato il fallback neutro."
             )
-        )
-
-        team_directory = (
-            self.teams_root
-            / team_slug
-        )
-
-        logo_path = (
-            team_directory
-            / "logo.png"
-        )
-
-        background_path = (
-            team_directory
-            / "background.png"
-        )
+        logger.info("Public reveal: team=%s", team_config.key)
 
         self._apply_team_background(
-            background_path
+            team_config.background_path,
+            team_config.primary_color,
+            team_config.secondary_color,
         )
 
         self._load_team_logo(
-            logo_path
+            team_config.logo_path
         )
 
         self.main_label.setText(
-            team.upper()
+            team_config.display_name
+            if team_config.configured
+            else team_config.display_name.upper()
         )
 
         self._set_team_text_style(
@@ -465,9 +464,11 @@ class PublicWindow(QMainWindow):
 
     def _apply_team_background(
         self,
-        background_path: Path,
+        background_path: Path | None,
+        primary_color: str = "#303030",
+        secondary_color: str = "#151515",
     ):
-        if background_path.exists():
+        if background_path is not None and background_path.exists():
             normalized_path = (
                 background_path
                 .resolve()
@@ -488,11 +489,11 @@ class PublicWindow(QMainWindow):
 
             return
 
-        logger.warning("Team background missing: %s", background_path)
+        logger.info("Team background fallback: %s", background_path or "not configured")
 
         self.central_widget.setStyleSheet(
-            """
-            QWidget {
+            f"""
+            QWidget {{
                 background:
                     qradialgradient(
                         cx: 0.5,
@@ -500,19 +501,19 @@ class PublicWindow(QMainWindow):
                         radius: 0.9,
                         fx: 0.5,
                         fy: 0.5,
-                        stop: 0 #303030,
-                        stop: 0.45 #151515,
+                        stop: 0 {primary_color},
+                        stop: 0.45 {secondary_color},
                         stop: 1 #050505
                     );
-            }
+            }}
             """
         )
 
     def _load_team_logo(
         self,
-        logo_path: Path,
+        logo_path: Path | None,
     ):
-        if not logo_path.exists():
+        if logo_path is None or not logo_path.exists():
             logger.warning("Team logo missing: %s", logo_path)
             self.logo_label.clear()
 
@@ -522,9 +523,9 @@ class PublicWindow(QMainWindow):
 
             return
 
-        pixmap = QPixmap(
-            str(logo_path)
-        )
+        pixmap = self._team_pixmap_cache.get(logo_path)
+        if pixmap is None:
+            pixmap = QPixmap(str(logo_path))
 
         if pixmap.isNull():
             logger.warning("Team logo is invalid: %s", logo_path)

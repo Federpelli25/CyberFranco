@@ -31,6 +31,9 @@ class AppSettings:
     logging_file: str
     logging_max_bytes: int
     logging_backup_count: int
+    character_audio_enabled: bool = True
+    character_audio_volume: float = 0.8
+    character_audio_output_device_id: str | None = None
 
     def resolve_project_path(
         self,
@@ -102,6 +105,11 @@ class SettingsLoader:
             "max_bytes": 5 * 1024 * 1024,
             "backup_count": 3,
         },
+        "character_audio": {
+            "enabled": True,
+            "volume": 0.8,
+            "output_device_id": None,
+        },
     }
 
     def __init__(
@@ -132,6 +140,14 @@ class SettingsLoader:
             }
         else:
             values["logging"] = raw_logging
+        raw_character_audio = raw_settings.get("character_audio", {})
+        if isinstance(raw_character_audio, dict):
+            values["character_audio"] = {
+                **self.DEFAULTS["character_audio"],
+                **raw_character_audio,
+            }
+        else:
+            values["character_audio"] = raw_character_audio
 
         self._validate(values)
 
@@ -171,7 +187,44 @@ class SettingsLoader:
             logging_backup_count=(
                 values["logging"]["backup_count"]
             ),
+            character_audio_enabled=values["character_audio"]["enabled"],
+            character_audio_volume=float(values["character_audio"]["volume"]),
+            character_audio_output_device_id=(
+                values["character_audio"]["output_device_id"]
+            ),
         )
+
+    def save_character_audio(
+        self,
+        enabled: bool,
+        volume: float,
+        output_device_id: str | None,
+        settings_path: str | Path | None = None,
+    ) -> None:
+        candidate = {
+            **self.DEFAULTS,
+            "character_audio": {
+                "enabled": enabled,
+                "volume": volume,
+                "output_device_id": output_device_id,
+            },
+        }
+        self._validate(candidate)
+        path = self._resolve_settings_path(settings_path)
+        values = self._read_json(path)
+        values["character_audio"] = candidate["character_audio"]
+        temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+        try:
+            temporary_path.write_text(
+                json.dumps(values, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            temporary_path.replace(path)
+        except OSError as exc:
+            temporary_path.unlink(missing_ok=True)
+            raise SettingsError(
+                "Impossibile salvare le impostazioni della voce."
+            ) from exc
 
     def save_microphone_device(
         self,
@@ -427,6 +480,28 @@ class SettingsLoader:
                     f"'logging.{key}' deve essere un intero "
                     "maggiore o uguale a zero."
                 )
+
+        character_audio = values["character_audio"]
+        if not isinstance(character_audio, dict):
+            raise SettingsError("'character_audio' deve essere un oggetto JSON.")
+        if not isinstance(character_audio.get("enabled"), bool):
+            raise SettingsError("'character_audio.enabled' deve essere true o false.")
+        volume = character_audio.get("volume")
+        if (
+            isinstance(volume, bool)
+            or not isinstance(volume, (int, float))
+            or not 0.0 <= volume <= 1.0
+        ):
+            raise SettingsError(
+                "'character_audio.volume' deve essere compreso tra 0 e 1."
+            )
+        device_id = character_audio.get("output_device_id")
+        if device_id is not None and (
+            not isinstance(device_id, str) or not device_id.strip()
+        ):
+            raise SettingsError(
+                "'character_audio.output_device_id' deve essere null o una stringa."
+            )
 
     @staticmethod
     def _require_non_empty_string(
