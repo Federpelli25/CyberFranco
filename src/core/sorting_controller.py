@@ -97,6 +97,9 @@ class SortingController(QObject):
         self.state_manager.state_changed.connect(
             self.operator_window.update_global_state
         )
+        public_state_handler = getattr(self.public_window, "set_state", None)
+        if callable(public_state_handler):
+            self.state_manager.state_changed.connect(public_state_handler)
         self.operator_window.update_global_state(self.state_manager.state)
 
     def _start_listening(self):

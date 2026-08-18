@@ -41,6 +41,11 @@ geometria del monitor selezionato, così può essere ridimensionata durante i te
 La console operatore viene posizionata sul monitor principale e resta una finestra
 separata.
 
+Il contenuto scenico include ora `FaceWidget`, guidato dagli stati applicativi e
+scalabile senza coordinate legate a uno specifico monitor. Durante il reveal la
+faccia esegue una breve reazione e lascia poi spazio al layer squadra esistente.
+Asset faccia mancanti degradano sul fallback vettoriale Qt.
+
 La shortcut di emergenza `Ctrl+Shift+F`, attiva nella console operatore, disattiva
 soltanto il fullscreen della finestra pubblica. Funziona anche durante un reveal.
 
@@ -64,6 +69,7 @@ grafico corrente non viene ricreato e il normale flusso reveal resta invariato.
 - `src/ui/display_manager.py` — enumerazione, descrizione e fallback schermi;
 - `src/ui/operator_window.py` — controlli, persistenza, hot-plug e shortcut;
 - `src/ui/public_window.py` — posizionamento e fullscreen;
+- `src/ui/face_widget.py` — volto, animazioni e fallback grafico;
 - `src/config/settings_loader.py` — salvataggio preferenze;
 - `main.py` — condivisione manager e collegamento tra le due finestre;
 - `tests/test_display_manager.py` — test mockati e offscreen.

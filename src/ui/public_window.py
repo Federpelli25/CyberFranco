@@ -10,6 +10,7 @@ from PySide6.QtCore import (
     QParallelAnimationGroup,
     QPauseAnimation,
     QEasingCurve,
+    QTimer,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 from src.config.settings_loader import AppSettings
 from src.ui.display_manager import DisplayManager
+from src.ui.face_widget import FaceWidget
 
 
 logger = logging.getLogger(__name__)
@@ -52,9 +54,11 @@ class PublicWindow(QMainWindow):
         self.teams_root = settings.resolve_project_path(
             "assets/teams"
         )
+        self.face_root = settings.resolve_project_path("assets/face")
 
         self.reveal_animation = None
         self.size_animation = None
+        self._visual_generation = 0
 
         self._build_ui()
         self.show_idle()
@@ -149,6 +153,8 @@ class PublicWindow(QMainWindow):
             40,
         )
 
+        self.face_widget = FaceWidget(self.face_root, parent=self.central_widget)
+
         self.logo_label = QLabel()
 
         self.logo_label.setAlignment(
@@ -177,6 +183,8 @@ class PublicWindow(QMainWindow):
 
         self.layout.addStretch()
 
+        self.layout.addWidget(self.face_widget, 1)
+
         self.layout.addWidget(
             self.logo_label
         )
@@ -189,6 +197,10 @@ class PublicWindow(QMainWindow):
 
     def show_idle(self):
         self._stop_current_animation()
+        self._visual_generation += 1
+        if self.face_widget.state != FaceWidget.IDLE:
+            self.face_widget.set_idle()
+        self.face_widget.setVisible(True)
 
         self.central_widget.setStyleSheet(
             """
@@ -224,6 +236,10 @@ class PublicWindow(QMainWindow):
 
     def show_listening(self):
         self._stop_current_animation()
+        self._visual_generation += 1
+        if self.face_widget.state != FaceWidget.LISTENING:
+            self.face_widget.set_listening()
+        self.face_widget.setVisible(True)
 
         self.logo_label.clear()
 
@@ -270,6 +286,10 @@ class PublicWindow(QMainWindow):
 
     def show_waiting_confirmation(self):
         self._stop_current_animation()
+        self._visual_generation += 1
+        if self.face_widget.state != FaceWidget.AWAITING_CONFIRMATION:
+            self.face_widget.set_awaiting_confirmation()
+        self.face_widget.setVisible(True)
 
         self.logo_label.clear()
 
@@ -316,6 +336,10 @@ class PublicWindow(QMainWindow):
 
     def show_thinking(self):
         self._stop_current_animation()
+        self._visual_generation += 1
+        if self.face_widget.state != FaceWidget.THINKING:
+            self.face_widget.set_thinking()
+        self.face_widget.setVisible(True)
 
         self.logo_label.clear()
 
@@ -366,6 +390,10 @@ class PublicWindow(QMainWindow):
         team: str,
     ):
         self._stop_current_animation()
+        self._visual_generation += 1
+        generation = self._visual_generation
+        self.face_widget.set_reveal()
+        self.face_widget.setVisible(True)
 
         team = team.strip()
 
@@ -415,6 +443,24 @@ class PublicWindow(QMainWindow):
             0.0
         )
 
+        QTimer.singleShot(
+            220,
+            lambda: self._begin_team_reveal(generation),
+        )
+
+    def set_state(self, state) -> None:
+        """Adatta la faccia allo stato autorevole dell'applicazione."""
+        normalized = getattr(state, "value", state)
+        if str(normalized).upper() == "REVEAL":
+            self.face_widget.set_reveal()
+            return
+        self.face_widget.set_state(normalized)
+
+    def _begin_team_reveal(self, generation: int) -> None:
+        if generation != self._visual_generation:
+            logger.debug("Stale public reveal transition ignored")
+            return
+        self.face_widget.setVisible(False)
         self._start_reveal_animation()
 
     def _apply_team_background(
@@ -635,10 +681,14 @@ class PublicWindow(QMainWindow):
         self.reveal_finished.emit()
 
     def _stop_current_animation(self):
-        if self.reveal_animation is None:
-            return
+        if self.reveal_animation is not None:
+            self.reveal_animation.stop()
 
-        self.reveal_animation.stop()
+    def closeEvent(self, event):
+        self._visual_generation += 1
+        self._stop_current_animation()
+        self.face_widget.stop_animations()
+        super().closeEvent(event)
 
     @staticmethod
     def _slugify_team_name(
